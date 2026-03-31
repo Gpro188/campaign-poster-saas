@@ -1,0 +1,24 @@
+{
+  "name": "campaign-poster-saas",
+  "version": "1.0.0",
+  "description": "Full-stack web application for campaign poster generation",
+  "scripts": {
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "start:server": "cd server && npm start",
+    "start:client": "cd client && npm run build && npm start"
+  },
+  "keywords": [
+    "campaign",
+    "poster",
+    "saas",
+    "image-processing"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

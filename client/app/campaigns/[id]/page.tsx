@@ -1,0 +1,641 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { campaignAPI, posterAPI } from '@/lib/api';
+import { Campaign, TextPosition } from '@/types';
+import { Upload, Download, Share2, Image as ImageIcon, Loader } from 'lucide-react';
+
+export default function CampaignPage() {
+  const router = useRouter();
+  const params = useParams();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  
+  // User inputs
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [location, setLocation] = useState('');
+  
+  // Photo adjustments
+  const [photoScale, setPhotoScale] = useState(1);
+  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
+  const [generating, setGenerating] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(false);
+
+  useEffect(() => {
+    const loadCampaign = async () => {
+      try {
+        const data = await campaignAPI.getById(params.id as string);
+        setCampaign(data);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load campaign');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (params.id) {
+      loadCampaign();
+    }
+  }, [params.id]);
+
+  // Draw canvas when photo is uploaded or campaign loads
+  useEffect(() => {
+    console.log('=== CANVAS USE EFFECT TRIGGERED ===');
+    console.log('Campaign:', campaign ? 'YES' : 'NO');
+    console.log('Canvas ref:', canvasRef.current ? 'EXISTS' : 'NULL');
+    console.log('Photo preview:', photoPreview ? 'EXISTS' : 'NULL');
+    console.log('Name:', name, 'Designation:', designation, 'Location:', location);
+    
+    if (!campaign || !canvasRef.current) {
+      console.log('Exiting: No campaign or canvas');
+      return;
+    }
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      console.log('Exiting: No 2D context');
+      return;
+    }
+
+    // Load frame image from backend
+    const frameImg = new Image();
+    frameImg.crossOrigin = 'anonymous';
+    // Remove /api/ prefix - backend serves static files directly at /uploads
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
+    
+    console.log('Loading frame from URL:', frameUrl);
+    console.log('Campaign frameImageUrl:', campaign.frameImageUrl);
+    console.log('Base URL used:', baseUrl);
+    
+    // Test if URL is accessible
+    fetch(frameUrl, { method: 'HEAD' })
+      .then(response => {
+        console.log('Frame URL HEAD request status:', response.status, response.ok);
+        if (!response.ok) {
+          console.error('Frame URL is not accessible! Status:', response.status);
+        }
+      })
+      .catch(err => {
+        console.error('Frame URL HEAD request failed:', err);
+        console.log('This might be a CORS issue or the file does not exist');
+      });
+    
+    frameImg.onload = () => {
+      console.log('✅ Frame loaded successfully!', { 
+        width: frameImg.width, 
+        height: frameImg.height 
+      });
+      
+      canvas.width = frameImg.width;
+      canvas.height = frameImg.height;
+
+      if (photoPreview) {
+        console.log('Drawing with photo...');
+        const photoImg = new Image();
+        photoImg.crossOrigin = 'anonymous';
+        photoImg.src = photoPreview;
+        
+        photoImg.onload = () => {
+          console.log('✅ Photo loaded, starting to draw...');
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw white background
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          console.log('Drew white background');
+          
+          // Draw user photo
+          const scaledWidth = photoImg.width * photoScale;
+          const scaledHeight = photoImg.height * photoScale;
+          
+          console.log('Drawing photo with scale:', photoScale, 'dimensions:', { x: photoPosition.x, y: photoPosition.y, w: scaledWidth, h: scaledHeight });
+          
+          ctx.drawImage(
+            photoImg,
+            photoPosition.x,
+            photoPosition.y,
+            scaledWidth,
+            scaledHeight
+          );
+          console.log('Drew photo');
+          
+          // Draw frame overlay
+          ctx.drawImage(frameImg, 0, 0);
+          console.log('Drew frame overlay');
+          
+          // Draw text - ALWAYS draw text if it exists
+          console.log('Drawing text with values:', { name, designation, location });
+          drawText(ctx, campaign.textPositions);
+          console.log('Drew text');
+          
+          console.log('🎨 Canvas drawing COMPLETE!');
+          setCanvasReady(true);
+        };
+        
+        photoImg.onerror = (err) => {
+          console.error('❌ Failed to load photo image:', err);
+          console.error('Photo source:', photoPreview.substring(0, 100) + '...');
+        };
+      } else {
+        console.log('No photo uploaded yet, showing frame only...');
+        // Just show frame
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(frameImg, 0, 0);
+        
+        // Still draw text even without photo
+        console.log('Drawing text (frame only mode):', { name, designation, location });
+        drawText(ctx, campaign.textPositions);
+        
+        setCanvasReady(true);
+        console.log('Frame displayed, waiting for photo upload...');
+      }
+    };
+    
+    frameImg.onerror = (err) => {
+      console.error('❌ Failed to load frame image from:', frameUrl);
+      console.error('Error event:', err);
+      console.log('Trying to test image loading...');
+      
+      // Try to create another image to test
+      const testImg = new Image();
+      testImg.onload = () => console.log('Test image loaded OK');
+      testImg.onerror = () => console.error('Test image also failed');
+      testImg.src = frameUrl + '?t=' + Date.now();
+    };
+    
+    // Force load in case of caching issues
+    frameImg.src = frameUrl + '?t=' + Date.now();
+  }, [campaign, photoPreview, photoScale, photoPosition, name, designation, location]);
+
+  const drawText = (ctx: CanvasRenderingContext2D, positions: TextPosition[]) => {
+    console.log('drawText called with positions:', positions.length);
+    
+    positions.forEach((pos) => {
+      let text = '';
+      switch (pos.field) {
+        case 'name':
+          text = name;
+          break;
+        case 'designation':
+          text = designation;
+          break;
+        case 'location':
+          text = location;
+          break;
+      }
+
+      // Only draw if text exists
+      if (text) {
+        const fontSize = pos.fontSize || 48;
+        const color = pos.color || '#FFFFFF';
+        const fontFamily = pos.fontFamily || 'Arial';
+        
+        console.log(`Drawing ${pos.field}: "${text}" at (${pos.x}, ${pos.y}), size: ${fontSize}px, color: ${color}`);
+        
+        ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px ${fontFamily}`;
+        ctx.fillStyle = color;
+        
+        // Add text shadow for better visibility
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
+        ctx.fillText(text, pos.x, pos.y);
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      } else {
+        console.log(`Skipping ${pos.field}: No text entered`);
+      }
+    });
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log('File selected:', file.name, 'size:', file.size, 'type:', file.type);
+      setPhoto(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        console.log('FileReader completed, setting photo preview');
+        setPhotoPreview(reader.result as string);
+      };
+      reader.onerror = (err) => {
+        console.error('FileReader error:', err);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!photoPreview || !canvasRef.current) return;
+    
+    setIsDragging(true);
+    
+    let clientX, clientY;
+    if ('touches' in e) {
+      // Touch event
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    setDragStart({
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    });
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !canvasRef.current) return;
+    
+    let clientX, clientY;
+    if ('touches' in e) {
+      // Touch event - prevent scrolling while dragging
+      e.preventDefault();
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const rect = canvasRef.current.getBoundingClientRect();
+    const currentX = clientX - rect.left;
+    const currentY = clientY - rect.top;
+    
+    const dx = currentX - dragStart.x;
+    const dy = currentY - dragStart.y;
+    
+    setPhotoPosition((prev) => ({
+      x: prev.x + dx,
+      y: prev.y + dy,
+    }));
+    
+    setDragStart({ x: currentX, y: currentY });
+  };
+
+  const handleCanvasMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleDownload = async () => {
+    if (!canvasRef.current || !campaign) return;
+    
+    if (!photoPreview) {
+      alert('Please upload a photo first!');
+      return;
+    }
+    
+    if (!name) {
+      alert('Please enter your name!');
+      return;
+    }
+    
+    setGenerating(true);
+    
+    try {
+      const canvas = canvasRef.current;
+      
+      // Ensure canvas is fully rendered before downloading
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // Convert canvas to blob
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((blob) => {
+          if (blob && blob.size > 0) {
+            resolve(blob);
+          } else {
+            reject(new Error('Canvas is empty or blob is invalid'));
+          }
+        }, 'image/png', 1.0);
+      });
+      
+      console.log('Poster blob created:', { size: blob.size, type: blob.type });
+      
+      // Save poster to backend
+      const formData = new FormData();
+      formData.append('campaignId', campaign._id);
+      formData.append('supporterName', name);
+      formData.append('designation', designation);
+      formData.append('location', location);
+      formData.append('photo', photo!);
+      
+      // Don't send generatedImageUrl as file - backend will use the uploaded photo
+      // The backend will save the uploaded photo path as both uploadedPhotoUrl and generatedImageUrl
+      
+      await posterAPI.create(formData);
+      
+      // Download the image
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `campaign-poster-${name}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      alert('Poster downloaded successfully!');
+    } catch (err: any) {
+      console.error('Error:', err);
+      alert('Failed to save poster. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!campaign) return;
+    
+    const message = encodeURIComponent(
+      `Check out my campaign poster for "${campaign.title}"! Create yours now!`
+    );
+    const url = `https://wa.me/?text=${message}`;
+    window.open(url, '_blank');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error || !campaign) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
+          <p className="text-gray-600">{error || 'Campaign not found'}</p>
+          <button
+            onClick={() => router.push('/')}
+            className="mt-4 text-blue-600 hover:underline"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 py-8">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">{campaign.title}</h1>
+          {campaign.description && (
+            <p className="text-gray-600 max-w-2xl mx-auto">{campaign.description}</p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Upload & Personal Info */}
+          <div className="space-y-6">
+            {/* Photo Upload */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <ImageIcon className="w-5 h-5" />
+                Upload Your Photo
+              </h2>
+              <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  {photoPreview ? (
+                    <>
+                      <p className="mb-2 text-sm text-gray-500 font-semibold">Your Uploaded Photo:</p>
+                      <img 
+                        src={photoPreview} 
+                        alt="Preview" 
+                        className="max-h-40 object-contain rounded-lg shadow-md" 
+                        onError={(e) => {
+                          console.error('Image failed to load in preview');
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-10 h-10 mb-3 text-gray-400" />
+                      <p className="mb-2 text-sm text-gray-500">
+                        <span className="font-semibold">Click to upload</span>
+                      </p>
+                      <p className="text-xs text-gray-500">PNG, JPG (Max 5MB)</p>
+                    </>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Personal Info */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">Your Information</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter your name"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Designation
+                  </label>
+                  <input
+                    type="text"
+                    value={designation}
+                    onChange={(e) => setDesignation(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Volunteer, Supporter"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., New York, USA"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDownload}
+                disabled={!photoPreview || !name || generating}
+                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                <Download className="w-5 h-5" />
+                {generating ? 'Generating...' : 'Download Poster'}
+              </button>
+              
+              <button
+                onClick={handleShareWhatsApp}
+                disabled={!photoPreview || !name}
+                className="flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                <Share2 className="w-5 h-5" />
+                Share on WhatsApp
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column - Canvas Preview & Adjustments */}
+          <div className="space-y-6">
+            {/* Canvas Preview */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-semibold mb-4">Preview {canvasReady && '✅'}</h2>
+              
+              {!canvasReady && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    ⏳ Loading canvas... Please wait.
+                  </p>
+                </div>
+              )}
+              
+              {canvasReady && photoPreview && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-sm text-green-800">
+                    ✅ Preview ready! Touch and drag to adjust position.
+                  </p>
+                </div>
+              )}
+              
+              {canvasReady && !photoPreview && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    ℹ️ Frame loaded! Upload your photo to see the merged result.
+                  </p>
+                </div>
+              )}
+              
+              <div className="overflow-x-auto relative">
+                <canvas
+                  ref={canvasRef}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                  onMouseLeave={handleCanvasMouseUp}
+                  onTouchStart={handleCanvasMouseDown}
+                  onTouchMove={handleCanvasMouseMove}
+                  onTouchEnd={handleCanvasMouseUp}
+                  onTouchCancel={handleCanvasMouseUp}
+                  className={`border border-gray-300 rounded-lg mx-auto transition-all duration-200 ${
+                    photoPreview 
+                      ? 'cursor-move hover:shadow-lg active:shadow-xl' 
+                      : 'cursor-default'
+                  }`}
+                  style={{ 
+                    maxWidth: '100%', 
+                    height: 'auto',
+                    minHeight: photoPreview ? '400px' : '200px',
+                    touchAction: 'none' // Prevent browser handling of touch events
+                  }}
+                />
+                {/* Mobile touch hint overlay - only shows when photo is uploaded */}
+                {photoPreview && canvasReady && (
+                  <div className="md:hidden absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-4 py-2 rounded-full text-sm pointer-events-none animate-pulse">
+                    👆 Touch & Drag to Adjust
+                  </div>
+                )}
+              </div>
+              {canvasReady && canvasRef.current && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  Canvas size: {canvasRef.current.width} x {canvasRef.current.height}px
+                </p>
+              )}
+            </div>
+
+            {/* Photo Adjustments - Now right below preview */}
+            {photoPreview && (
+              <div className="bg-white rounded-lg shadow-lg p-6 sticky top-4">
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5" />
+                  Adjust Your Photo
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Scale: {Math.round(photoScale * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="3"
+                      step="0.1"
+                      value={photoScale}
+                      onChange={(e) => setPhotoScale(parseFloat(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium">💡 Live Preview:</p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Changes appear instantly on the canvas above ↑
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800 font-medium">👆 Touch & Drag:</p>
+                    <p className="text-sm text-green-700 mt-1">
+                      Touch the photo on the canvas and drag to position it perfectly!
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-600 hidden md:block">
+                    🖱️ Or use your mouse to drag the photo on the canvas
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,40 @@
+export interface TextPosition {
+  field: 'name' | 'designation' | 'location';
+  x: number;
+  y: number;
+  fontSize?: number;
+  fontFamily?: string;
+  color?: string;
+  isBold?: boolean;
+}
+
+export interface Campaign {
+  _id: string;
+  title: string;
+  description?: string;
+  frameImageUrl: string;
+  textPositions: TextPosition[];
+  status: 'active' | 'inactive';
+  ownerId: string;
+  posterCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Poster {
+  _id: string;
+  campaignId: string | Campaign;
+  supporterName: string;
+  designation?: string;
+  location?: string;
+  uploadedPhotoUrl: string;
+  generatedImageUrl: string;
+  shareCount: number;
+  createdAt: string;
+}
+
+export interface CampaignStats {
+  campaign: Campaign;
+  totalPosters: number;
+  recentPosters: Poster[];
+}
