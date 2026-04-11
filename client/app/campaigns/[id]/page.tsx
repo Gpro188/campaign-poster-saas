@@ -567,7 +567,7 @@ export default function CampaignPage() {
   const handleDownload = async () => {
     if (!canvasRef.current || !campaign) return;
     
-    if (!photoPreview) {
+    if (!croppedPhoto && !photoPreview) {
       alert('Please upload a photo first!');
       return;
     }
@@ -582,38 +582,88 @@ export default function CampaignPage() {
     try {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      console.log('Generating final poster...');
       
-      // Ensure canvas is fully rendered before downloading
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Load frame image
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+      const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
       
-      // If campaign has crop shape, apply it before downloading
-      const hasCropShape = (campaign as any).cropShape;
+      const frameImg = new Image();
+      frameImg.crossOrigin = 'anonymous';
       
-      if (hasCropShape && ctx) {
-        console.log('Applying crop shape to downloaded image...');
+      await new Promise((resolve, reject) => {
+        frameImg.onload = resolve;
+        frameImg.onerror = reject;
+        frameImg.src = frameUrl;
+      });
+
+      // Set canvas to frame dimensions
+      canvas.width = frameImg.width;
+      canvas.height = frameImg.height;
+
+      // Draw white background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw cropped photo (or original if no crop)
+      const photoToUse = croppedPhoto || photoPreview;
+      if (photoToUse) {
+        const photoImg = new Image();
+        photoImg.crossOrigin = 'anonymous';
         
-        // Create a temporary canvas for cropping
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        const tempCtx = tempCanvas.getContext('2d');
+        await new Promise((resolve, reject) => {
+          photoImg.onload = resolve;
+          photoImg.onerror = reject;
+          photoImg.src = photoToUse;
+        });
+
+        const cropShape = (campaign as any).cropShape;
         
-        if (tempCtx) {
-          // Copy current canvas to temp
-          tempCtx.drawImage(canvas, 0, 0);
-          
-          // Clear main canvas
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
+        if (cropShape) {
           // Apply crop shape clipping
-          applyCropShape(ctx, (campaign as any).cropShape);
-          
-          // Draw cropped image
-          ctx.drawImage(tempCanvas, 0, 0);
-          
-          console.log('Crop shape applied!');
+          if (cropShape.type === 'circle') {
+            const centerX = cropShape.x + cropShape.width / 2;
+            const centerY = cropShape.y + cropShape.height / 2;
+            const radius = Math.min(cropShape.width, cropShape.height) / 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.clip();
+          } else if (cropShape.type === 'triangle') {
+            const centerX = cropShape.x + cropShape.width / 2;
+            ctx.beginPath();
+            ctx.moveTo(centerX, cropShape.y);
+            ctx.lineTo(cropShape.x, cropShape.y + cropShape.height);
+            ctx.lineTo(cropShape.x + cropShape.width, cropShape.y + cropShape.height);
+            ctx.closePath();
+            ctx.clip();
+          }
+          // Rectangle doesn't need clipping
+        }
+
+        // Draw the photo
+        if (cropShape) {
+          // Use crop shape position and size
+          ctx.drawImage(photoImg, cropShape.x, cropShape.y, cropShape.width, cropShape.height);
+        } else {
+          // Scale to fit frame
+          const scale = Math.max(canvas.width / photoImg.width, canvas.height / photoImg.height);
+          const scaledWidth = photoImg.width * scale;
+          const scaledHeight = photoImg.height * scale;
+          const x = (canvas.width - scaledWidth) / 2;
+          const y = (canvas.height - scaledHeight) / 2;
+          ctx.drawImage(photoImg, x, y, scaledWidth, scaledHeight);
         }
       }
+
+      // Draw frame overlay
+      ctx.drawImage(frameImg, 0, 0);
+
+      // Draw text
+      drawText(ctx, campaign.textPositions);
+
+      console.log('Poster generated successfully!');
       
       // Convert canvas to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
