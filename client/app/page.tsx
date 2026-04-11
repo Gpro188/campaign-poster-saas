@@ -67,15 +67,6 @@ export default function Home() {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-3xl font-bold text-gray-900">Active Campaigns</h2>
-            {isAdmin && (
-              <Link
-                href="/admin/create-campaign"
-                className="hidden md:flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <PlusCircle className="w-5 h-5" />
-                Create Campaign
-              </Link>
-            )}
           </div>
 
           {loading ? (
