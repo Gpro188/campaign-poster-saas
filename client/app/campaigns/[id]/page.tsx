@@ -29,9 +29,14 @@ export default function CampaignPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
+  // Crop workflow states
+  const [step, setStep] = useState<'upload' | 'crop' | 'details' | 'done'>('upload');
+  const [croppedPhoto, setCroppedPhoto] = useState<string | null>(null);
+  
   const [generating, setGenerating] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const loadCampaign = async () => {
@@ -305,12 +310,79 @@ export default function CampaignPage() {
       reader.onloadend = () => {
         console.log('FileReader completed, setting photo preview');
         setPhotoPreview(reader.result as string);
+        // Move to crop step if campaign has crop shape
+        if ((campaign as any).cropShape) {
+          setStep('crop');
+        }
       };
       reader.onerror = (err) => {
         console.error('FileReader error:', err);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Handle crop confirmation
+  const handleCropConfirm = () => {
+    if (!cropCanvasRef.current || !photoPreview || !campaign) return;
+    
+    const cropShape = (campaign as any).cropShape;
+    if (!cropShape) {
+      // No crop shape, just use original photo
+      setCroppedPhoto(photoPreview);
+      setStep('details');
+      return;
+    }
+
+    // Create cropped image
+    const canvas = cropCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    img.onload = () => {
+      // Set canvas to crop shape dimensions
+      canvas.width = cropShape.width;
+      canvas.height = cropShape.height;
+
+      // Apply crop shape clipping
+      if (cropShape.type === 'circle') {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(canvas.width, canvas.height) / 2;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.clip();
+      } else if (cropShape.type === 'triangle') {
+        const centerX = canvas.width / 2;
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0);
+        ctx.lineTo(0, canvas.height);
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.closePath();
+        ctx.clip();
+      }
+      // Rectangle doesn't need special clipping
+
+      // Calculate scale and position to fit photo in crop area
+      const scaleX = cropShape.width / img.width;
+      const scaleY = cropShape.height / img.height;
+      const scale = Math.max(scaleX, scaleY) * photoScale;
+      
+      const scaledWidth = img.width * scale;
+      const scaledHeight = img.height * scale;
+      const x = (cropShape.width - scaledWidth) / 2 + photoPosition.x;
+      const y = (cropShape.height - scaledHeight) / 2 + photoPosition.y;
+
+      // Draw cropped image
+      ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+
+      // Save cropped photo
+      const croppedDataUrl = canvas.toDataURL('image/png');
+      setCroppedPhoto(croppedDataUrl);
+      setStep('details');
+    };
+    img.src = photoPreview;
   };
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
