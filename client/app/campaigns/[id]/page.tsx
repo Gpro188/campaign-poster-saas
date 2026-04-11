@@ -731,11 +731,36 @@ export default function CampaignPage() {
     }
   };
 
-  const handleShareWhatsApp = () => {
+  const handleShareWhatsApp = async () => {
     if (!campaign) return;
     
+    // If user has created a poster, share it with the image
+    const imageToShare = croppedPhoto || photoPreview;
+    if (imageToShare) {
+      try {
+        // Convert image to blob
+        const response = await fetch(imageToShare);
+        const blob = await response.blob();
+        const file = new File([blob], 'campaign-poster.png', { type: 'image/png' });
+        
+        // Try to use Web Share API (works on mobile)
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: campaign.title,
+            text: `${campaign.title}\n\n${campaign.description || ''}\n\nCreate your campaign poster now!`,
+          });
+          return;
+        }
+      } catch (err) {
+        console.log('Web Share API failed, falling back to text-only share');
+      }
+    }
+    
+    // Fallback: Share text only with campaign link
+    const campaignUrl = window.location.href;
     const message = encodeURIComponent(
-      `Check out my campaign poster for "${campaign.title}"! Create yours now!`
+      `*${campaign.title}*\n\n${campaign.description || ''}\n\nCreate your campaign poster now!\n\n${campaignUrl}`
     );
     const url = `https://wa.me/?text=${message}`;
     window.open(url, '_blank');
