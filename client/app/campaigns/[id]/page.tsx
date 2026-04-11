@@ -31,6 +31,7 @@ export default function CampaignPage() {
   
   const [generating, setGenerating] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const loadCampaign = async () => {
@@ -251,6 +252,11 @@ export default function CampaignPage() {
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!photoPreview || !canvasRef.current) return;
     
+    // Prevent default to stop scrolling on mobile
+    if ('touches' in e) {
+      e.preventDefault();
+    }
+    
     setIsDragging(true);
     
     let clientX, clientY;
@@ -274,10 +280,14 @@ export default function CampaignPage() {
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDragging || !canvasRef.current) return;
     
+    // Prevent scrolling on mobile while dragging
+    if ('touches' in e) {
+      e.preventDefault();
+    }
+    
     let clientX, clientY;
     if ('touches' in e) {
-      // Touch event - prevent scrolling while dragging
-      e.preventDefault();
+      // Touch event
       clientX = e.touches[0].clientX;
       clientY = e.touches[0].clientY;
     } else {
@@ -293,17 +303,37 @@ export default function CampaignPage() {
     const dx = currentX - dragStart.x;
     const dy = currentY - dragStart.y;
     
-    setPhotoPosition((prev) => ({
-      x: prev.x + dx,
-      y: prev.y + dy,
-    }));
+    // Use requestAnimationFrame for smoother performance on mobile
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
     
-    setDragStart({ x: currentX, y: currentY });
+    animationFrameRef.current = requestAnimationFrame(() => {
+      setPhotoPosition((prev) => ({
+        x: prev.x + dx,
+        y: prev.y + dy,
+      }));
+      
+      setDragStart({ x: currentX, y: currentY });
+    });
   };
 
   const handleCanvasMouseUp = () => {
     setIsDragging(false);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
   };
+
+  // Cleanup animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   const handleDownload = async () => {
     if (!canvasRef.current || !campaign) return;
@@ -352,17 +382,38 @@ export default function CampaignPage() {
       
       await posterAPI.create(formData);
       
-      // Download the image
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `campaign-poster-${name}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Download the image - with mobile fallback
+      const fileName = `campaign-poster-${name}.png`;
       
-      alert('Poster downloaded successfully!');
+      // Check if it's iOS Safari (which doesn't support download attribute)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      if (isIOS || isSafari) {
+        // For iOS Safari: open image in new tab for long-press save
+        const url = URL.createObjectURL(blob);
+        const newWindow = window.open(url, '_blank');
+        
+        if (!newWindow) {
+          // Popup blocked - fallback to showing alert
+          alert('Please allow popups to download, or long-press the preview image to save it.');
+        } else {
+          alert('Your poster is ready! Long-press the image and select "Save Image" to download it.');
+        }
+        
+        // Clean up after delay
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } else {
+        // Standard download for desktop and Android
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
     } catch (err: any) {
       console.error('Error:', err);
       alert('Failed to save poster. Please try again.');
@@ -556,7 +607,7 @@ export default function CampaignPage() {
                 </div>
               )}
               
-              <div className="overflow-x-auto relative">
+              <div className="overflow-x-auto relative" style={{ touchAction: 'pan-x' }}>
                 <canvas
                   ref={canvasRef}
                   onMouseDown={handleCanvasMouseDown}
@@ -576,7 +627,10 @@ export default function CampaignPage() {
                     maxWidth: '100%', 
                     height: 'auto',
                     minHeight: photoPreview ? '400px' : '200px',
-                    touchAction: 'none' // Prevent browser handling of touch events
+                    touchAction: 'none', // Critical: prevents all browser touch gestures
+                    WebkitTouchCallout: 'none', // iOS: prevent long-press menu
+                    WebkitUserSelect: 'none', // iOS: prevent text selection
+                    userSelect: 'none' // Prevent text selection
                   }}
                 />
                 {/* Mobile touch hint overlay - only shows when photo is uploaded */}
