@@ -36,7 +36,7 @@ const createCampaign = async (req, res) => {
       return res.status(400).json({ message: 'Frame image is required' });
     }
 
-    const { title, description, textPositions, ownerId, startDate, endDate } = req.body;
+    const { title, description, textPositions, ownerId, startDate, endDate, cropShape } = req.body;
     
     // Parse dates or use defaults
     const start = startDate ? new Date(startDate) : new Date();
@@ -57,6 +57,15 @@ const createCampaign = async (req, res) => {
       endDate: end,
       isSubscriptionActive: true
     };
+
+    // Add cropShape if provided
+    if (cropShape) {
+      try {
+        campaignData.cropShape = JSON.parse(cropShape);
+      } catch (e) {
+        console.error('Error parsing cropShape:', e);
+      }
+    }
 
     const campaign = new Campaign(campaignData);
     await campaign.save();
@@ -137,7 +146,7 @@ const getAllAdminCampaigns = async (req, res) => {
 const updateCampaign = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, textPositions, status, startDate, endDate, isSubscriptionActive } = req.body;
+    const { title, description, textPositions, status, startDate, endDate, isSubscriptionActive, cropShape } = req.body;
 
     const updateData = {};
     if (title) updateData.title = title;
@@ -147,6 +156,18 @@ const updateCampaign = async (req, res) => {
     if (endDate) updateData.endDate = new Date(endDate);
     if (isSubscriptionActive !== undefined) updateData.isSubscriptionActive = isSubscriptionActive;
     if (textPositions) updateData.textPositions = JSON.parse(textPositions);
+    
+    // Handle cropShape
+    if (cropShape) {
+      try {
+        updateData.cropShape = JSON.parse(cropShape);
+      } catch (e) {
+        console.error('Error parsing cropShape in update:', e);
+      }
+    } else if (cropShape === 'null' || cropShape === '') {
+      // Allow removing crop shape
+      updateData.cropShape = null;
+    }
 
     // Handle new frame image upload
     if (req.file) {
