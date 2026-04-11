@@ -447,10 +447,13 @@ export default function CreateCampaignPage() {
             </div>
           </div>
 
-          {/* Photo Crop Shape */}
+          {/* Photo Crop Shape - NEW FEATURE v2.0 */}
           {framePreview && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-semibold mb-4">Photo Crop Shape</h2>
+            <div className="bg-white rounded-lg shadow p-6 border-2 border-green-500">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold">🎨 Photo Crop Shape</h2>
+                <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">NEW</span>
+              </div>
               <p className="text-sm text-gray-600 mb-4">
                 Select a shape to guide where users place their photos. This makes it easier for them to position correctly!
               </p>
