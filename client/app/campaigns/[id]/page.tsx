@@ -144,6 +144,12 @@ export default function CampaignPage() {
           drawText(ctx, campaign.textPositions);
           console.log('Drew text');
           
+          // Draw crop shape guide if campaign has one
+          if ((campaign as any).cropShape) {
+            console.log('Drawing crop shape guide:', (campaign as any).cropShape);
+            drawCropShapeGuide(ctx, (campaign as any).cropShape);
+          }
+          
           console.log('🎨 Canvas drawing COMPLETE!');
           setCanvasReady(true);
         };
@@ -410,9 +416,39 @@ export default function CampaignPage() {
     
     try {
       const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
       
       // Ensure canvas is fully rendered before downloading
       await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // If campaign has crop shape, apply it before downloading
+      const hasCropShape = (campaign as any).cropShape;
+      
+      if (hasCropShape && ctx) {
+        console.log('Applying crop shape to downloaded image...');
+        
+        // Create a temporary canvas for cropping
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        
+        if (tempCtx) {
+          // Copy current canvas to temp
+          tempCtx.drawImage(canvas, 0, 0);
+          
+          // Clear main canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Apply crop shape clipping
+          applyCropShape(ctx, (campaign as any).cropShape);
+          
+          // Draw cropped image
+          ctx.drawImage(tempCanvas, 0, 0);
+          
+          console.log('Crop shape applied!');
+        }
+      }
       
       // Convert canvas to blob
       const blob = await new Promise<Blob>((resolve, reject) => {
