@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { campaignAPI, posterAPI } from '@/lib/api';
-import { Campaign, TextPosition } from '@/types';
-import { Upload, Download, Share2, Image as ImageIcon, Loader } from 'lucide-react';
+import { Campaign, TextPosition, CropShape } from '@/types';
+import { Upload, Download, Share2, Image as ImageIcon, Loader, Circle, Square, Triangle } from 'lucide-react';
 
 export default function CampaignPage() {
   const router = useRouter();
@@ -230,6 +230,64 @@ export default function CampaignPage() {
         console.log(`Skipping ${pos.field}: No text entered`);
       }
     });
+  };
+
+  // Draw crop shape guide overlay
+  const drawCropShapeGuide = (ctx: CanvasRenderingContext2D, shape: CropShape) => {
+    ctx.save();
+    ctx.strokeStyle = '#3B82F6';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 5]);
+    ctx.globalAlpha = 0.6;
+    
+    if (shape.type === 'circle') {
+      const centerX = shape.x + shape.width / 2;
+      const centerY = shape.y + shape.height / 2;
+      const radius = Math.min(shape.width, shape.height) / 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (shape.type === 'rectangle') {
+      ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+    } else if (shape.type === 'triangle') {
+      const centerX = shape.x + shape.width / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, shape.y);
+      ctx.lineTo(shape.x, shape.y + shape.height);
+      ctx.lineTo(shape.x + shape.width, shape.y + shape.height);
+      ctx.closePath();
+      ctx.stroke();
+    }
+    
+    ctx.restore();
+  };
+
+  // Apply crop shape to image on download
+  const applyCropShape = (ctx: CanvasRenderingContext2D, shape: CropShape) => {
+    ctx.save();
+    
+    if (shape.type === 'circle') {
+      const centerX = shape.x + shape.width / 2;
+      const centerY = shape.y + shape.height / 2;
+      const radius = Math.min(shape.width, shape.height) / 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.clip();
+    } else if (shape.type === 'rectangle') {
+      ctx.beginPath();
+      ctx.rect(shape.x, shape.y, shape.width, shape.height);
+      ctx.clip();
+    } else if (shape.type === 'triangle') {
+      const centerX = shape.x + shape.width / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, shape.y);
+      ctx.lineTo(shape.x, shape.y + shape.height);
+      ctx.lineTo(shape.x + shape.width, shape.y + shape.height);
+      ctx.closePath();
+      ctx.clip();
+    }
+    
+    ctx.restore();
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
