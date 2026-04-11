@@ -8,12 +8,22 @@ export interface TextPosition {
   isBold?: boolean;
 }
 
+export interface CropShape {
+  type: 'circle' | 'rectangle' | 'triangle';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number; // for triangle
+}
+
 export interface Campaign {
   _id: string;
   title: string;
   description?: string;
   frameImageUrl: string;
   textPositions: TextPosition[];
+  cropShape?: CropShape;
   status: 'active' | 'inactive';
   ownerId: string;
   posterCount: number;

@@ -32,6 +32,34 @@ const textPositionSchema = new mongoose.Schema({
   }
 });
 
+const cropShapeSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ['circle', 'rectangle', 'triangle'],
+    default: 'rectangle'
+  },
+  x: {
+    type: Number,
+    required: true
+  },
+  y: {
+    type: Number,
+    required: true
+  },
+  width: {
+    type: Number,
+    required: true
+  },
+  height: {
+    type: Number,
+    required: true
+  },
+  rotation: {
+    type: Number,
+    default: 0
+  }
+});
+
 const campaignSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -47,6 +75,10 @@ const campaignSchema = new mongoose.Schema({
     required: true
   },
   textPositions: [textPositionSchema],
+  cropShape: {
+    type: cropShapeSchema,
+    default: null
+  },
   status: {
     type: String,
     enum: ['active', 'inactive'],

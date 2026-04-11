@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { campaignAPI } from '@/lib/api';
-import { TextPosition } from '@/types';
-import { Upload, Save, X, Type, Move } from 'lucide-react';
+import { TextPosition, CropShape } from '@/types';
+import { Upload, Save, X, Type, Move, Circle, Square, Triangle } from 'lucide-react';
 
 interface DraggableText {
   field: 'name' | 'designation' | 'location';
@@ -33,6 +33,12 @@ export default function CreateCampaignPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   
+  // Crop shape state
+  const [cropShape, setCropShape] = useState<CropShape | null>(null);
+  const [selectedShapeType, setSelectedShapeType] = useState<'none' | 'circle' | 'rectangle' | 'triangle'>('none');
+  const [draggingShape, setDraggingShape] = useState(false);
+  const [resizingShape, setResizingShape] = useState(false);
+  
   // Subscription duration
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(() => {
@@ -51,6 +57,131 @@ export default function CreateCampaignPage() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Shape management functions
+  const handleShapeTypeChange = (shapeType: 'none' | 'circle' | 'rectangle' | 'triangle') => {
+    setSelectedShapeType(shapeType);
+    if (shapeType === 'none') {
+      setCropShape(null);
+    } else if (framePreview && canvasRef.current) {
+      // Create default shape in center of canvas
+      const canvas = canvasRef.current;
+      const defaultWidth = canvas.width * 0.3;
+      const defaultHeight = canvas.height * 0.3;
+      setCropShape({
+        type: shapeType,
+        x: (canvas.width - defaultWidth) / 2,
+        y: (canvas.height - defaultHeight) / 2,
+        width: defaultWidth,
+        height: defaultHeight,
+        rotation: 0
+      });
+    }
+  };
+
+  const handleShapeMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!cropShape || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // Check if clicking inside shape
+    if (
+      x >= cropShape.x &&
+      x <= cropShape.x + cropShape.width &&
+      y >= cropShape.y &&
+      y <= cropShape.y + cropShape.height
+    ) {
+      // Check if clicking near bottom-right corner for resize
+      const isNearCorner = 
+        Math.abs(x - (cropShape.x + cropShape.width)) < 20 &&
+        Math.abs(y - (cropShape.y + cropShape.height)) < 20;
+      
+      if (isNearCorner) {
+        setResizingShape(true);
+      } else {
+        setDraggingShape(true);
+      }
+      e.preventDefault();
+    }
+  };
+
+  const handleShapeMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if ((!draggingShape && !resizingShape) || !cropShape || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    if (draggingShape) {
+      setCropShape(prev => prev ? {
+        ...prev,
+        x: x - prev.width / 2,
+        y: y - prev.height / 2
+      } : null);
+    } else if (resizingShape) {
+      setCropShape(prev => prev ? {
+        ...prev,
+        width: Math.max(50, x - prev.x),
+        height: Math.max(50, y - prev.y)
+      } : null);
+    }
+  };
+
+  const handleShapeMouseUp = () => {
+    setDraggingShape(false);
+    setResizingShape(false);
+  };
+
+  const drawCropShape = (ctx: CanvasRenderingContext2D, shape: CropShape) => {
+    ctx.save();
+    ctx.strokeStyle = '#3B82F6';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 5]);
+    
+    if (shape.type === 'circle') {
+      const centerX = shape.x + shape.width / 2;
+      const centerY = shape.y + shape.height / 2;
+      const radius = Math.min(shape.width, shape.height) / 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Fill with semi-transparent color
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fill();
+    } else if (shape.type === 'rectangle') {
+      ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+    } else if (shape.type === 'triangle') {
+      const centerX = shape.x + shape.width / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, shape.y);
+      ctx.lineTo(shape.x, shape.y + shape.height);
+      ctx.lineTo(shape.x + shape.width, shape.y + shape.height);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fill();
+    }
+    
+    // Draw resize handle
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#3B82F6';
+    ctx.beginPath();
+    ctx.arc(shape.x + shape.width, shape.y + shape.height, 8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
   };
 
   useEffect(() => {
@@ -93,6 +224,11 @@ export default function CreateCampaignPage() {
           ctx.strokeRect(pos.x - 5, pos.y - fontSize, metrics.width + 10, fontSize + 10);
         });
         
+        // Draw crop shape if exists
+        if (cropShape) {
+          drawCropShape(ctx, cropShape);
+        }
+        
         console.log('Canvas rendered:', { 
           width: canvas.width, 
           height: canvas.height, 
@@ -104,7 +240,7 @@ export default function CreateCampaignPage() {
         console.error('Failed to load frame image');
       };
     }
-  }, [framePreview, textPositions]);
+  }, [framePreview, textPositions, cropShape]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
@@ -196,6 +332,11 @@ export default function CreateCampaignPage() {
             }))
         )
       );
+
+      // Add cropShape if exists
+      if (cropShape) {
+        formData.append('cropShape', JSON.stringify(cropShape));
+      }
 
       await campaignAPI.create(formData);
       alert('Campaign created successfully!');
@@ -306,6 +447,79 @@ export default function CreateCampaignPage() {
             </div>
           </div>
 
+          {/* Photo Crop Shape */}
+          {framePreview && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold mb-4">Photo Crop Shape</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a shape to guide where users place their photos. This makes it easier for them to position correctly!
+              </p>
+              
+              {/* Shape Type Selector */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('none')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'none'
+                      ? 'border-gray-800 bg-gray-100'
+                      : 'border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <X className="w-6 h-6" />
+                  <span className="text-xs font-medium">None</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('circle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'circle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Circle className="w-6 h-6" />
+                  <span className="text-xs font-medium">Circle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('rectangle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'rectangle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Square className="w-6 h-6" />
+                  <span className="text-xs font-medium">Rectangle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('triangle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'triangle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Triangle className="w-6 h-6" />
+                  <span className="text-xs font-medium">Triangle</span>
+                </button>
+              </div>
+              
+              {cropShape && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800 font-medium">💡 Instructions:</p>
+                  <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                    <li>• Drag the shape on canvas to reposition</li>
+                    <li>• Drag the blue circle (bottom-right) to resize</li>
+                    <li>• Users will see this shape when uploading photos</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Text Position Editor */}
           {framePreview && (
             <div className="bg-white rounded-lg shadow p-6">
@@ -326,10 +540,29 @@ export default function CreateCampaignPage() {
               <div className="overflow-x-auto">
                 <canvas
                   ref={canvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseUp}
+                  onMouseDown={(e) => {
+                    if (cropShape) {
+                      handleShapeMouseDown(e);
+                    }
+                    if (!draggingShape && !resizingShape) {
+                      handleCanvasMouseDown(e);
+                    }
+                  }}
+                  onMouseMove={(e) => {
+                    if (cropShape && (draggingShape || resizingShape)) {
+                      handleShapeMouseMove(e);
+                    } else if (!draggingShape && !resizingShape) {
+                      handleCanvasMouseMove(e);
+                    }
+                  }}
+                  onMouseUp={() => {
+                    handleShapeMouseUp();
+                    handleCanvasMouseUp();
+                  }}
+                  onMouseLeave={() => {
+                    handleShapeMouseUp();
+                    handleCanvasMouseUp();
+                  }}
                   className="border border-gray-300 rounded-lg cursor-move max-w-full bg-white"
                   style={{ minHeight: '400px', minWidth: '600px' }}
                 />
