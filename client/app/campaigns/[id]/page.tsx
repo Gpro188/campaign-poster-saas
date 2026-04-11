@@ -678,42 +678,65 @@ export default function CampaignPage() {
       
       console.log('Poster blob created:', { size: blob.size, type: blob.type });
       
-      // Save poster to backend
-      const formData = new FormData();
-      formData.append('campaignId', campaign._id);
-      formData.append('supporterName', name);
-      formData.append('designation', designation);
-      formData.append('location', location);
-      formData.append('photo', photo!);
+      // Create a file from the blob for saving
+      const posterFile = new File([blob], `campaign-poster-${name}.png`, { type: 'image/png' });
       
-      // Don't send generatedImageUrl as file - backend will use the uploaded photo
-      // The backend will save the uploaded photo path as both uploadedPhotoUrl and generatedImageUrl
+      // Try to save poster to backend (optional, don't fail if it errors)
+      try {
+        const formData = new FormData();
+        formData.append('campaignId', campaign._id);
+        formData.append('supporterName', name);
+        formData.append('designation', designation);
+        formData.append('location', location);
+        formData.append('photo', posterFile);
+        
+        await posterAPI.create(formData);
+        console.log('Poster saved to backend successfully');
+      } catch (saveErr) {
+        console.warn('Failed to save poster to backend, but download will still work:', saveErr);
+        // Continue with download even if backend save fails
+      }
       
-      await posterAPI.create(formData);
-      
-      // Download the image - with mobile fallback
+      // Download the image - mobile optimized
       const fileName = `campaign-poster-${name}.png`;
       
-      // Check if it's iOS Safari (which doesn't support download attribute)
+      // Check if mobile device
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
       
-      if (isIOS || isSafari) {
-        // For iOS Safari: open image in new tab for long-press save
+      // Try Web Share API first (best for mobile)
+      if (isMobile && navigator.share && navigator.canShare({ files: [posterFile] })) {
+        try {
+          await navigator.share({
+            files: [posterFile],
+            title: 'Campaign Poster',
+            text: `My campaign poster for ${campaign.title}`,
+          });
+          console.log('Shared successfully via Web Share API');
+          return; // Don't download if shared
+        } catch (shareErr) {
+          console.log('Share cancelled or failed, falling back to download');
+        }
+      }
+      
+      // Fallback: Download file
+      if (isIOS) {
+        // iOS Safari: open in new tab for long-press save
         const url = URL.createObjectURL(blob);
         const newWindow = window.open(url, '_blank');
         
         if (!newWindow) {
-          // Popup blocked - fallback to showing alert
-          alert('Please allow popups to download, or long-press the preview image to save it.');
+          alert('Please allow popups to download your poster.');
         } else {
-          alert('Your poster is ready! Long-press the image and select "Save Image" to download it.');
+          // iOS users need instructions
+          setTimeout(() => {
+            alert('Your poster is ready!\n\nLong-press the image and select "Save to Photos" or "Save Image".');
+          }, 1000);
         }
         
-        // Clean up after delay
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
       } else {
-        // Standard download for desktop and Android
+        // Android and Desktop: direct download
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
@@ -722,6 +745,11 @@ export default function CampaignPage() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        
+        // Show success message for mobile
+        if (isMobile) {
+          alert('Poster downloaded! Check your Downloads folder.');
+        }
       }
     } catch (err: any) {
       console.error('Error:', err);
