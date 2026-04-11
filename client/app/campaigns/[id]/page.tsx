@@ -385,6 +385,99 @@ export default function CampaignPage() {
     img.src = photoPreview;
   };
 
+  // Draw photo on crop canvas when step changes to 'crop'
+  useEffect(() => {
+    if (step === 'crop' && photoPreview && cropCanvasRef.current && campaign) {
+      const canvas = cropCanvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const cropShape = (campaign as any).cropShape;
+      if (!cropShape) {
+        // No crop shape, show full photo
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = Math.min(img.width, 600);
+          canvas.height = (canvas.width / img.width) * img.height;
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = photoPreview;
+        return;
+      }
+
+      // Set canvas to crop shape size
+      canvas.width = cropShape.width;
+      canvas.height = cropShape.height;
+
+      // Draw photo with current position and scale
+      const img = new Image();
+      img.onload = () => {
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw shape outline guide
+        ctx.save();
+        ctx.strokeStyle = '#3B82F6';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        if (cropShape.type === 'circle') {
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          const radius = Math.min(canvas.width, canvas.height) / 2;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (cropShape.type === 'triangle') {
+          const centerX = canvas.width / 2;
+          ctx.beginPath();
+          ctx.moveTo(centerX, 0);
+          ctx.lineTo(0, canvas.height);
+          ctx.lineTo(canvas.width, canvas.height);
+          ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        }
+        ctx.restore();
+
+        // Apply clipping for shape
+        if (cropShape.type === 'circle') {
+          const centerX = canvas.width / 2;
+          const centerY = canvas.height / 2;
+          const radius = Math.min(canvas.width, canvas.height) / 2;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          ctx.clip();
+        } else if (cropShape.type === 'triangle') {
+          const centerX = canvas.width / 2;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(centerX, 0);
+          ctx.lineTo(0, canvas.height);
+          ctx.lineTo(canvas.width, canvas.height);
+          ctx.closePath();
+          ctx.clip();
+        }
+
+        // Calculate photo position and scale
+        const scaleX = cropShape.width / img.width;
+        const scaleY = cropShape.height / img.height;
+        const scale = Math.max(scaleX, scaleY) * photoScale;
+        
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        const x = (cropShape.width - scaledWidth) / 2 + photoPosition.x;
+        const y = (cropShape.height - scaledHeight) / 2 + photoPosition.y;
+
+        // Draw photo
+        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+        ctx.restore();
+      };
+      img.src = photoPreview;
+    }
+  }, [step, photoPreview, photoScale, photoPosition, campaign]);
+
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!photoPreview || !canvasRef.current) return;
     
