@@ -625,7 +625,7 @@ export default function CampaignPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
+      <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">{campaign.title}</h1>
           {campaign.description && (
@@ -633,229 +633,194 @@ export default function CampaignPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Upload & Personal Info */}
-          <div className="space-y-6">
-            {/* Photo Upload */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <ImageIcon className="w-5 h-5" />
-                Upload Your Photo
-              </h2>
-              <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  {photoPreview ? (
-                    <>
-                      <p className="mb-2 text-sm text-gray-500 font-semibold">Your Uploaded Photo:</p>
-                      <img 
-                        src={photoPreview} 
-                        alt="Preview" 
-                        className="max-h-40 object-contain rounded-lg shadow-md" 
-                        onError={(e) => {
-                          console.error('Image failed to load in preview');
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-10 h-10 mb-3 text-gray-400" />
-                      <p className="mb-2 text-sm text-gray-500">
-                        <span className="font-semibold">Click to upload</span>
-                      </p>
-                      <p className="text-xs text-gray-500">PNG, JPG (Max 5MB)</p>
-                    </>
-                  )}
-                </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                />
-              </label>
+        {/* Step Indicator */}
+        <div className="flex items-center justify-center mb-8">
+          <div className="flex items-center gap-4">
+            {['Upload', 'Crop', 'Details', 'Download'].map((stepName, idx) => {
+              const stepNames = ['upload', 'crop', 'details', 'done'];
+              const currentIdx = stepNames.indexOf(step);
+              const isActive = idx <= currentIdx;
+              return (
+                <React.Fragment key={stepName}>
+                  {idx > 0 && <div className={`w-12 h-1 ${isActive ? 'bg-blue-600' : 'bg-gray-300'}`} />}
+                  <div className={`flex items-center gap-2 ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${isActive ? 'bg-blue-600 text-white' : 'bg-gray-300'}`}>
+                      {idx + 1}
+                    </div>
+                    <span className="text-sm font-medium hidden sm:inline">{stepName}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Step 1: Upload */}
+        {step === 'upload' && (
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <h2 className="text-2xl font-semibold mb-6 text-center">Upload Your Photo</h2>
+            <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <Upload className="w-16 h-16 mb-4 text-gray-400" />
+                <p className="mb-2 text-lg text-gray-700">
+                  <span className="font-semibold">Click to upload your photo</span>
+                </p>
+                <p className="text-sm text-gray-500">PNG, JPG (Max 5MB)</p>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                className="hidden"
+              />
+            </label>
+          </div>
+        )}
+
+        {/* Step 2: Crop */}
+        {step === 'crop' && (
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <h2 className="text-2xl font-semibold mb-4 text-center">Adjust Your Photo</h2>
+            <p className="text-center text-gray-600 mb-6">
+              Drag and scale your photo to fit inside the shape
+            </p>
+            
+            {/* Crop Canvas */}
+            <div className="mb-6 flex justify-center">
+              <canvas
+                ref={cropCanvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={handleCanvasMouseUp}
+                onTouchStart={handleCanvasMouseDown}
+                onTouchMove={handleCanvasMouseMove}
+                onTouchEnd={handleCanvasMouseUp}
+                onTouchCancel={handleCanvasMouseUp}
+                className="border-2 border-blue-500 rounded-lg cursor-move"
+                style={{ 
+                  maxWidth: '100%',
+                  touchAction: 'none',
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  userSelect: 'none'
+                }}
+              />
             </div>
 
-            {/* Personal Info */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Your Information</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter your name"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Designation
-                  </label>
-                  <input
-                    type="text"
-                    value={designation}
-                    onChange={(e) => setDesignation(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., Volunteer, Supporter"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., New York, USA"
-                  />
-                </div>
-              </div>
+            {/* Scale Control */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Scale: {Math.round(photoScale * 100)}%
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="3"
+                step="0.05"
+                value={photoScale}
+                onChange={(e) => setPhotoScale(parseFloat(e.target.value))}
+                className="w-full"
+              />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-3">
+            <div className="flex gap-4">
               <button
-                onClick={handleDownload}
-                disabled={!photoPreview || !name || generating}
-                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                onClick={() => setStep('upload')}
+                className="flex-1 bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 font-medium"
               >
-                <Download className="w-5 h-5" />
-                {generating ? 'Generating...' : 'Download Poster'}
+                ← Back
               </button>
-              
               <button
-                onClick={handleShareWhatsApp}
-                disabled={!photoPreview || !name}
-                className="flex items-center justify-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                onClick={handleCropConfirm}
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium"
               >
-                <Share2 className="w-5 h-5" />
-                Share on WhatsApp
+                Confirm & Continue →
               </button>
             </div>
           </div>
+        )}
 
-          {/* Right Column - Canvas Preview & Adjustments */}
-          <div className="space-y-6">
-            {/* Canvas Preview */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">Preview {canvasReady && '✅'}</h2>
-              
-              {!canvasReady && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800">
-                    ⏳ Loading canvas... Please wait.
-                  </p>
-                </div>
-              )}
-              
-              {canvasReady && photoPreview && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm text-green-800">
-                    ✅ Preview ready! Touch and drag to adjust position.
-                  </p>
-                </div>
-              )}
-              
-              {canvasReady && !photoPreview && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    ℹ️ Frame loaded! Upload your photo to see the merged result.
-                  </p>
-                </div>
-              )}
-              
-              <div className="overflow-x-auto relative" style={{ touchAction: 'pan-x' }}>
-                <canvas
-                  ref={canvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseUp}
-                  onTouchStart={handleCanvasMouseDown}
-                  onTouchMove={handleCanvasMouseMove}
-                  onTouchEnd={handleCanvasMouseUp}
-                  onTouchCancel={handleCanvasMouseUp}
-                  className={`border border-gray-300 rounded-lg mx-auto transition-all duration-200 ${
-                    photoPreview 
-                      ? 'cursor-move hover:shadow-lg active:shadow-xl' 
-                      : 'cursor-default'
-                  }`}
-                  style={{ 
-                    maxWidth: '100%', 
-                    height: 'auto',
-                    minHeight: photoPreview ? '400px' : '200px',
-                    touchAction: 'none', // Critical: prevents all browser touch gestures
-                    WebkitTouchCallout: 'none', // iOS: prevent long-press menu
-                    WebkitUserSelect: 'none', // iOS: prevent text selection
-                    userSelect: 'none' // Prevent text selection
-                  }}
+        {/* Step 3: Details */}
+        {step === 'details' && (
+          <div className="bg-white rounded-lg shadow-lg p-8">
+            <h2 className="text-2xl font-semibold mb-6 text-center">Enter Your Information</h2>
+            
+            {/* Cropped Photo Preview */}
+            {croppedPhoto && (
+              <div className="mb-6 flex justify-center">
+                <img 
+                  src={croppedPhoto} 
+                  alt="Cropped" 
+                  className="max-h-48 rounded-lg shadow-md"
                 />
-                {/* Mobile touch hint overlay - only shows when photo is uploaded */}
-                {photoPreview && canvasReady && (
-                  <div className="md:hidden absolute bottom-2 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-4 py-2 rounded-full text-sm pointer-events-none animate-pulse">
-                    👆 Touch & Drag to Adjust
-                  </div>
-                )}
-              </div>
-              {canvasReady && canvasRef.current && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Canvas size: {canvasRef.current.width} x {canvasRef.current.height}px
-                </p>
-              )}
-            </div>
-
-            {/* Photo Adjustments - Now right below preview */}
-            {photoPreview && (
-              <div className="bg-white rounded-lg shadow-lg p-6 sticky top-4">
-                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                  <ImageIcon className="w-5 h-5" />
-                  Adjust Your Photo
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Scale: {Math.round(photoScale * 100)}%
-                    </label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="3"
-                      step="0.1"
-                      value={photoScale}
-                      onChange={(e) => setPhotoScale(parseFloat(e.target.value))}
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-sm text-blue-800 font-medium">💡 Live Preview:</p>
-                    <p className="text-sm text-blue-700 mt-1">
-                      Changes appear instantly on the canvas above ↑
-                    </p>
-                  </div>
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-sm text-green-800 font-medium">👆 Touch & Drag:</p>
-                    <p className="text-sm text-green-700 mt-1">
-                      Touch the photo on the canvas and drag to position it perfectly!
-                    </p>
-                  </div>
-                  <p className="text-sm text-gray-600 hidden md:block">
-                    🖱️ Or use your mouse to drag the photo on the canvas
-                  </p>
-                </div>
               </div>
             )}
+
+            <div className="space-y-4 max-w-md mx-auto">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name *
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter your name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Designation
+                </label>
+                <input
+                  type="text"
+                  value={designation}
+                  onChange={(e) => setDesignation(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Volunteer, Supporter"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., New York, USA"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-8">
+              <button
+                onClick={() => setStep('crop')}
+                className="flex-1 bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 font-medium"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={!name || generating}
+                className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {generating ? 'Generating...' : 'Download Poster →'}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Hidden canvas for final poster generation */}
+        <canvas ref={canvasRef} className="hidden" />
       </div>
     </div>
   );
 }
+
