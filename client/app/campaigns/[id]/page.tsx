@@ -35,6 +35,8 @@ export default function CampaignPage() {
   
   const [generating, setGenerating] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
+  const [posterGenerated, setPosterGenerated] = useState(false);
+  const [generatedPosterBlob, setGeneratedPosterBlob] = useState<Blob | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -580,121 +582,11 @@ export default function CampaignPage() {
     setGenerating(true);
     
     try {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      console.log('Generating final poster...');
+      const blob = await generatePoster();
       
-      // Load frame image
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-      const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
-      
-      const frameImg = new Image();
-      frameImg.crossOrigin = 'anonymous';
-      
-      await new Promise((resolve, reject) => {
-        frameImg.onload = resolve;
-        frameImg.onerror = reject;
-        frameImg.src = frameUrl;
-      });
-
-      // Set canvas to frame dimensions
-      canvas.width = frameImg.width;
-      canvas.height = frameImg.height;
-
-      // Draw white background
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw cropped photo (or original if no crop)
-      const photoToUse = croppedPhoto || photoPreview;
-      if (photoToUse) {
-        const photoImg = new Image();
-        photoImg.crossOrigin = 'anonymous';
-        
-        await new Promise((resolve, reject) => {
-          photoImg.onload = resolve;
-          photoImg.onerror = reject;
-          photoImg.src = photoToUse;
-        });
-
-        const cropShape = (campaign as any).cropShape;
-        
-        if (cropShape) {
-          // Apply crop shape clipping
-          if (cropShape.type === 'circle') {
-            const centerX = cropShape.x + cropShape.width / 2;
-            const centerY = cropShape.y + cropShape.height / 2;
-            const radius = Math.min(cropShape.width, cropShape.height) / 2;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            ctx.clip();
-          } else if (cropShape.type === 'triangle') {
-            const centerX = cropShape.x + cropShape.width / 2;
-            ctx.beginPath();
-            ctx.moveTo(centerX, cropShape.y);
-            ctx.lineTo(cropShape.x, cropShape.y + cropShape.height);
-            ctx.lineTo(cropShape.x + cropShape.width, cropShape.y + cropShape.height);
-            ctx.closePath();
-            ctx.clip();
-          }
-          // Rectangle doesn't need clipping
-        }
-
-        // Draw the photo
-        if (cropShape) {
-          // Use crop shape position and size
-          ctx.drawImage(photoImg, cropShape.x, cropShape.y, cropShape.width, cropShape.height);
-        } else {
-          // Scale to fit frame
-          const scale = Math.max(canvas.width / photoImg.width, canvas.height / photoImg.height);
-          const scaledWidth = photoImg.width * scale;
-          const scaledHeight = photoImg.height * scale;
-          const x = (canvas.width - scaledWidth) / 2;
-          const y = (canvas.height - scaledHeight) / 2;
-          ctx.drawImage(photoImg, x, y, scaledWidth, scaledHeight);
-        }
-      }
-
-      // Draw frame overlay
-      ctx.drawImage(frameImg, 0, 0);
-
-      // Draw text
-      drawText(ctx, campaign.textPositions);
-
-      console.log('Poster generated successfully!');
-      
-      // Convert canvas to blob
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((blob) => {
-          if (blob && blob.size > 0) {
-            resolve(blob);
-          } else {
-            reject(new Error('Canvas is empty or blob is invalid'));
-          }
-        }, 'image/png', 1.0);
-      });
-      
-      console.log('Poster blob created:', { size: blob.size, type: blob.type });
-      
-      // Create a file from the blob for saving
-      const posterFile = new File([blob], `campaign-poster-${name}.png`, { type: 'image/png' });
-      
-      // Try to save poster to backend (optional, don't fail if it errors)
-      try {
-        const formData = new FormData();
-        formData.append('campaignId', campaign._id);
-        formData.append('supporterName', name);
-        formData.append('designation', designation);
-        formData.append('location', location);
-        formData.append('photo', posterFile);
-        
-        await posterAPI.create(formData);
-        console.log('Poster saved to backend successfully');
-      } catch (saveErr) {
-        console.warn('Failed to save poster to backend, but download will still work:', saveErr);
-        // Continue with download even if backend save fails
+      if (!blob) {
+        alert('Failed to generate poster. Please try again.');
+        return;
       }
       
       // Download the image - mobile optimized
@@ -704,31 +596,14 @@ export default function CampaignPage() {
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
       
-      // Try Web Share API first (best for mobile)
-      if (isMobile && navigator.share && navigator.canShare({ files: [posterFile] })) {
-        try {
-          await navigator.share({
-            files: [posterFile],
-            title: 'Campaign Poster',
-            text: `My campaign poster for ${campaign.title}`,
-          });
-          console.log('Shared successfully via Web Share API');
-          return; // Don't download if shared
-        } catch (shareErr) {
-          console.log('Share cancelled or failed, falling back to download');
-        }
-      }
-      
-      // Fallback: Download file
+      // iOS Safari: open in new tab for long-press save
       if (isIOS) {
-        // iOS Safari: open in new tab for long-press save
         const url = URL.createObjectURL(blob);
         const newWindow = window.open(url, '_blank');
         
         if (!newWindow) {
           alert('Please allow popups to download your poster.');
         } else {
-          // iOS users need instructions
           setTimeout(() => {
             alert('Your poster is ready!\n\nLong-press the image and select "Save to Photos" or "Save Image".');
           }, 1000);
@@ -746,7 +621,6 @@ export default function CampaignPage() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
         
-        // Show success message for mobile
         if (isMobile) {
           alert('Poster downloaded! Check your Downloads folder.');
         }
@@ -759,40 +633,157 @@ export default function CampaignPage() {
     }
   };
 
-  const handleShareWhatsApp = async () => {
-    if (!campaign) return;
+  // Generate poster and save to backend
+  const generatePoster = async (): Promise<Blob | null> => {
+    if (!canvasRef.current || !campaign) return null;
     
-    const campaignUrl = window.location.href;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    console.log('Generating final poster...');
     
-    // If user has created a poster, try to share it with the image
-    const imageToShare = croppedPhoto || photoPreview;
-    if (imageToShare) {
-      try {
-        // Convert image to blob
-        const response = await fetch(imageToShare);
-        const blob = await response.blob();
-        const file = new File([blob], 'campaign-poster.png', { type: 'image/png' });
-        
-        // Try to use Web Share API (works on mobile)
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: campaign.title,
-            text: `*${campaign.title}*\n\n${campaign.description || ''}\n\nCreate your campaign poster now!\n\n${campaignUrl}`,
-          });
-          return;
+    // Load frame image
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
+    
+    const frameImg = new Image();
+    frameImg.crossOrigin = 'anonymous';
+    
+    await new Promise((resolve, reject) => {
+      frameImg.onload = resolve;
+      frameImg.onerror = reject;
+      frameImg.src = frameUrl;
+    });
+
+    // Set canvas to frame dimensions
+    canvas.width = frameImg.width;
+    canvas.height = frameImg.height;
+
+    // Draw white background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw cropped photo (or original if no crop)
+    const photoToUse = croppedPhoto || photoPreview;
+    if (photoToUse) {
+      const photoImg = new Image();
+      photoImg.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        photoImg.onload = resolve;
+        photoImg.onerror = reject;
+        photoImg.src = photoToUse;
+      });
+
+      const cropShape = (campaign as any).cropShape;
+      
+      if (cropShape) {
+        // Apply crop shape clipping
+        if (cropShape.type === 'circle') {
+          const centerX = cropShape.x + cropShape.width / 2;
+          const centerY = cropShape.y + cropShape.height / 2;
+          const radius = Math.min(cropShape.width, cropShape.height) / 2;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          ctx.clip();
+        } else if (cropShape.type === 'triangle') {
+          const centerX = cropShape.x + cropShape.width / 2;
+          ctx.beginPath();
+          ctx.moveTo(centerX, cropShape.y);
+          ctx.lineTo(cropShape.x, cropShape.y + cropShape.height);
+          ctx.lineTo(cropShape.x + cropShape.width, cropShape.y + cropShape.height);
+          ctx.closePath();
+          ctx.clip();
         }
-      } catch (err) {
-        console.log('Web Share API failed, falling back to text-only share');
+        // Rectangle doesn't need clipping
+      }
+
+      // Draw the photo
+      if (cropShape) {
+        ctx.drawImage(photoImg, cropShape.x, cropShape.y, cropShape.width, cropShape.height);
+      } else {
+        const scale = Math.max(canvas.width / photoImg.width, canvas.height / photoImg.height);
+        const scaledWidth = photoImg.width * scale;
+        const scaledHeight = photoImg.height * scale;
+        const x = (canvas.width - scaledWidth) / 2;
+        const y = (canvas.height - scaledHeight) / 2;
+        ctx.drawImage(photoImg, x, y, scaledWidth, scaledHeight);
       }
     }
+
+    // Draw frame overlay
+    ctx.drawImage(frameImg, 0, 0);
+
+    // Draw text
+    drawText(ctx, campaign.textPositions);
+
+    console.log('Poster generated successfully!');
     
-    // Fallback: Share text with campaign link
-    const message = encodeURIComponent(
-      `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\nCreate your campaign poster now!\n\n${campaignUrl}`
-    );
-    const url = `https://wa.me/?text=${message}`;
-    window.open(url, '_blank');
+    // Convert canvas to blob
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob && blob.size > 0) {
+          resolve(blob);
+        } else {
+          reject(new Error('Canvas is empty or blob is invalid'));
+        }
+      }, 'image/png', 1.0);
+    });
+    
+    console.log('Poster blob created:', { size: blob.size, type: blob.type });
+    
+    // Save poster to backend
+    const posterFile = new File([blob], `campaign-poster-${name}.png`, { type: 'image/png' });
+    
+    try {
+      const formData = new FormData();
+      formData.append('campaignId', campaign._id);
+      formData.append('supporterName', name);
+      formData.append('designation', designation);
+      formData.append('location', location);
+      formData.append('photo', posterFile);
+      
+      await posterAPI.create(formData);
+      console.log('Poster saved to backend successfully');
+    } catch (saveErr) {
+      console.warn('Failed to save poster to backend:', saveErr);
+    }
+    
+    return blob;
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (!campaign || !name) {
+      alert('Please enter your name first!');
+      return;
+    }
+    
+    if (!croppedPhoto && !photoPreview) {
+      alert('Please upload a photo first!');
+      return;
+    }
+    
+    setGenerating(true);
+    
+    try {
+      // Generate and save poster first
+      const blob = await generatePoster();
+      
+      if (!blob) {
+        alert('Failed to generate poster. Please try again.');
+        return;
+      }
+      
+      // Mark poster as generated and show thank you screen
+      setGeneratedPosterBlob(blob);
+      setPosterGenerated(true);
+    } catch (err: any) {
+      console.error('Error:', err);
+      alert('Failed to generate poster. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   if (loading) {
@@ -941,7 +932,7 @@ export default function CampaignPage() {
         )}
 
         {/* Step 3: Details */}
-        {step === 'details' && (
+        {step === 'details' && !posterGenerated && (
           <div className="bg-white rounded-lg shadow-lg p-8">
             <h2 className="text-2xl font-semibold mb-6 text-center">Enter Your Information</h2>
             
@@ -1008,6 +999,116 @@ export default function CampaignPage() {
 
               <button
                 onClick={handleShareWhatsApp}
+                disabled={!name || generating}
+                className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                {generating ? 'Generating...' : 'Share on WhatsApp'}
+              </button>
+
+              <button
+                onClick={() => setStep('crop')}
+                className="w-full bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 font-medium"
+              >
+                ← Back to Crop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Thank You Screen */}
+        {posterGenerated && (
+          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+            <div className="mb-6">
+              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Thank You!</h2>
+              <p className="text-lg text-gray-600">Thanks for joining the campaign! 🎉</p>
+              <p className="text-gray-500 mt-2">Your poster has been created successfully.</p>
+            </div>
+
+            {/* Poster Preview */}
+            {generatedPosterBlob && (
+              <div className="mb-6">
+                <img
+                  src={URL.createObjectURL(generatedPosterBlob)}
+                  alt="Your Campaign Poster"
+                  className="max-w-full h-auto rounded-lg shadow-lg mx-auto"
+                  style={{ maxHeight: '400px' }}
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="space-y-4 max-w-md mx-auto">
+              <button
+                onClick={async () => {
+                  if (!generatedPosterBlob) return;
+                  
+                  const fileName = `campaign-poster-${name}.png`;
+                  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+                  
+                  if (isIOS) {
+                    const url = URL.createObjectURL(generatedPosterBlob);
+                    const newWindow = window.open(url, '_blank');
+                    if (!newWindow) {
+                      alert('Please allow popups to download your poster.');
+                    } else {
+                      setTimeout(() => {
+                        alert('Your poster is ready!\n\nLong-press the image and select "Save to Photos" or "Save Image".');
+                      }, 1000);
+                    }
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                  } else {
+                    const url = URL.createObjectURL(generatedPosterBlob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                  }
+                }}
+                className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Download Poster
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (!generatedPosterBlob || !campaign) return;
+                  
+                  const campaignUrl = window.location.href;
+                  const file = new File([generatedPosterBlob], 'campaign-poster.png', { type: 'image/png' });
+                  
+                  // Try Web Share API first (best for mobile)
+                  if (navigator.share && navigator.canShare({ files: [file] })) {
+                    try {
+                      await navigator.share({
+                        files: [file],
+                        title: campaign.title,
+                        text: `*${campaign.title}*\n\n${campaign.description || ''}\n\nCreate your campaign poster now!\n\n${campaignUrl}`,
+                      });
+                      return;
+                    } catch (err) {
+                      console.log('Share cancelled, falling back to text-only');
+                    }
+                  }
+                  
+                  // Fallback: Share text with campaign link
+                  const message = encodeURIComponent(
+                    `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\nCreate your campaign poster now!\n\n${campaignUrl}`
+                  );
+                  const url = `https://wa.me/?text=${message}`;
+                  window.open(url, '_blank');
+                }}
                 className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -1017,10 +1118,13 @@ export default function CampaignPage() {
               </button>
 
               <button
-                onClick={() => setStep('crop')}
+                onClick={() => {
+                  setPosterGenerated(false);
+                  setGeneratedPosterBlob(null);
+                }}
                 className="w-full bg-gray-300 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-400 font-medium"
               >
-                ← Back to Crop
+                ← Back to Edit
               </button>
             </div>
           </div>
