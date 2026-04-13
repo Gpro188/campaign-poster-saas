@@ -80,13 +80,15 @@ export default function CampaignPage() {
     // Load frame image from backend
     const frameImg = new Image();
     frameImg.crossOrigin = 'anonymous';
-    // Remove /api/ prefix - backend serves static files directly at /uploads
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-    const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
+    
+    // Check if frameImageUrl is already a full URL (Cloudinary) or relative path
+    const frameUrl = campaign.frameImageUrl.startsWith('http') 
+      ? campaign.frameImageUrl 
+      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
     
     console.log('Loading frame from URL:', frameUrl);
     console.log('Campaign frameImageUrl:', campaign.frameImageUrl);
-    console.log('Base URL used:', baseUrl);
+    console.log('Is Cloudinary URL:', campaign.frameImageUrl.startsWith('http'));
     
     // Test if URL is accessible
     fetch(frameUrl, { method: 'HEAD' })
@@ -643,9 +645,12 @@ export default function CampaignPage() {
 
     console.log('Generating final poster...');
     
-    // Load frame image
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-    const frameUrl = `${baseUrl}${campaign.frameImageUrl}`;
+    // Load frame image - check if it's a Cloudinary URL or relative path
+    const frameUrl = campaign.frameImageUrl.startsWith('http') 
+      ? campaign.frameImageUrl 
+      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
+    
+    console.log('Generating poster with frame URL:', frameUrl);
     
     const frameImg = new Image();
     frameImg.crossOrigin = 'anonymous';

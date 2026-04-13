@@ -136,8 +136,10 @@ export default function EditCampaignPage() {
 
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
-      img.src = `${baseUrl}${existingFrameUrl}`;
+      // Check if URL is already absolute (Cloudinary) or relative
+      img.src = existingFrameUrl.startsWith('http') 
+        ? existingFrameUrl 
+        : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${existingFrameUrl}`;
       
       img.onload = () => {
         canvas.width = img.width;

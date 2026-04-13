@@ -91,8 +91,9 @@ export default function Home() {
                   <div className="aspect-video bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center overflow-hidden relative">
                     {campaign.frameImageUrl ? (
                       <img
-                        // Remove /api/ prefix - backend serves static files directly at /uploads
-                        src={`${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')}${campaign.frameImageUrl}`}
+                        src={campaign.frameImageUrl.startsWith('http') 
+                          ? campaign.frameImageUrl 
+                          : `${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')}${campaign.frameImageUrl}`}
                         alt={campaign.title}
                         className="w-full h-full object-cover"
                       />
