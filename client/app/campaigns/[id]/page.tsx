@@ -150,7 +150,7 @@ export default function CampaignPage() {
           
           // Draw text - ALWAYS draw text if it exists
           console.log('Drawing text with values:', { name, designation, location });
-          drawText(ctx, campaign.textPositions);
+          drawText(ctx, canvas, campaign.textPositions);
           console.log('Drew text');
           
           // Draw crop shape guide if campaign has one
@@ -177,7 +177,7 @@ export default function CampaignPage() {
         
         // Still draw text even without photo
         console.log('Drawing text (frame only mode):', { name, designation, location });
-        drawText(ctx, campaign.textPositions);
+        drawText(ctx, canvas, campaign.textPositions);
         
         setCanvasReady(true);
         console.log('Frame displayed, waiting for photo upload...');
@@ -200,7 +200,44 @@ export default function CampaignPage() {
     frameImg.src = frameUrl + '?t=' + Date.now();
   }, [campaign, photoPreview, photoScale, photoPosition, name, designation, location]);
 
-  const drawText = (ctx: CanvasRenderingContext2D, positions: TextPosition[]) => {
+  // Draw text with wrapping to fit within maxWidth
+  const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = y;
+    const maxLines = 2; // Maximum 2 lines
+    let lineCount = 0;
+
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line + words[i] + ' ';
+      const metrics = ctx.measureText(testLine);
+      const testWidth = metrics.width;
+
+      if (testWidth > maxWidth && i > 0) {
+        // Draw current line
+        ctx.fillText(line.trim(), x, currentY);
+        line = words[i] + ' ';
+        currentY += lineHeight;
+        lineCount++;
+        
+        // If we've reached max lines, stop
+        if (lineCount >= maxLines) {
+          // Add ellipsis if there are more words
+          if (i < words.length) {
+            ctx.fillText(line.trim() + '...', x, currentY);
+          }
+          return;
+        }
+      } else {
+        line = testLine;
+      }
+    }
+    
+    // Draw the last line
+    ctx.fillText(line.trim(), x, currentY);
+  };
+
+  const drawText = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, positions: TextPosition[]) => {
     console.log('drawText called with positions:', positions.length);
     
     positions.forEach((pos) => {
@@ -234,7 +271,11 @@ export default function CampaignPage() {
         ctx.shadowOffsetX = 2;
         ctx.shadowOffsetY = 2;
         
-        ctx.fillText(text, pos.x, pos.y);
+        // Calculate max width (canvas width - x position - margin)
+        const maxWidth = canvas.width - pos.x - 40; // 40px margin from right edge
+        
+        // Draw text with wrapping
+        drawWrappedText(ctx, text, pos.x, pos.y, maxWidth, fontSize);
         
         // Reset shadow
         ctx.shadowColor = 'transparent';
@@ -721,7 +762,7 @@ export default function CampaignPage() {
     ctx.drawImage(frameImg, 0, 0);
 
     // Draw text
-    drawText(ctx, campaign.textPositions);
+    drawText(ctx, canvas, campaign.textPositions);
 
     console.log('Poster generated successfully!');
     
