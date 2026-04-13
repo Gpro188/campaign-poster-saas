@@ -3,6 +3,7 @@ export interface TextPosition {
   label?: string; // Display label for the field (e.g., "Student Name", "Institution")
   x: number;
   y: number;
+  width?: number; // Text box width for wrapping
   fontSize?: number;
   fontFamily?: string;
   color?: string;

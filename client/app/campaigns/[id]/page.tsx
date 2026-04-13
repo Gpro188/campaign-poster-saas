@@ -293,8 +293,8 @@ export default function CampaignPage() {
         ctx.shadowOffsetX = 2;
         ctx.shadowOffsetY = 2;
         
-        // Calculate max width (canvas width - x position - margin)
-        const maxWidth = canvas.width - pos.x - 40; // 40px margin from right edge
+        // Calculate max width (use custom width if set, otherwise use canvas width - x position - margin)
+        const maxWidth = pos.width || (canvas.width - pos.x - 40);
         
         // Get text alignment (default to left)
         const textAlign = pos.textAlign || 'left';

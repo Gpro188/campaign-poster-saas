@@ -11,6 +11,7 @@ interface DraggableText {
   label: string;
   x: number;
   y: number;
+  width?: number; // Text box width for wrapping
   fontSize?: number;
   color?: string;
   isBold?: boolean;
@@ -33,6 +34,11 @@ export default function CreateCampaignPage() {
   const [draggingField, setDraggingField] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Resize state
+  const [resizingField, setResizingField] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<'left' | 'right' | null>(null);
+  const [resizeStart, setResizeStart] = useState({ x: 0, width: 0 });
   
   // Crop shape state
   const [cropShape, setCropShape] = useState<CropShape | null>(null);
@@ -218,11 +224,35 @@ export default function CreateCampaignPage() {
           ctx.fillStyle = color;
           ctx.fillText(pos.label, pos.x, pos.y);
           
-          // Draw bounding box for visualization
-          const metrics = ctx.measureText(pos.label);
-          ctx.strokeStyle = '#FF0000';
+          // Calculate text box dimensions
+          const boxWidth = pos.width || (canvas.width - pos.x - 40);
+          const boxHeight = fontSize * 2.5; // Approximate for 2 lines
+          
+          // Draw text box background
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+          ctx.fillRect(pos.x, pos.y - fontSize, boxWidth, boxHeight);
+          
+          // Draw text box border
+          ctx.strokeStyle = '#3B82F6';
           ctx.lineWidth = 2;
-          ctx.strokeRect(pos.x - 5, pos.y - fontSize, metrics.width + 10, fontSize + 10);
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(pos.x, pos.y - fontSize, boxWidth, boxHeight);
+          ctx.setLineDash([]);
+          
+          // Draw resize handles (small squares on left and right)
+          const handleSize = 12;
+          ctx.fillStyle = '#3B82F6';
+          
+          // Left handle
+          ctx.fillRect(pos.x - handleSize/2, pos.y - fontSize + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          
+          // Right handle
+          ctx.fillRect(pos.x + boxWidth - handleSize/2, pos.y - fontSize + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          
+          // Draw width label
+          ctx.fillStyle = '#3B82F6';
+          ctx.font = '12px Arial';
+          ctx.fillText(`${Math.round(boxWidth)}px`, pos.x + boxWidth/2 - 20, pos.y - fontSize - 5);
         });
         
         // Draw crop shape if exists
@@ -255,18 +285,54 @@ export default function CreateCampaignPage() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
-    // Check if clicked near any enabled text position
+    // Check if clicked on resize handles first
     const enabledPositions = textPositions.filter(pos => pos.enabled !== false);
+    for (const pos of enabledPositions) {
+      const fontSize = pos.fontSize || 48;
+      const boxWidth = pos.width || (canvas.width - pos.x - 40);
+      const boxHeight = fontSize * 2.5;
+      const handleSize = 12;
+      const centerY = pos.y - fontSize + (boxHeight / 2);
+      
+      // Check left handle
+      if (
+        x >= pos.x - handleSize &&
+        x <= pos.x + handleSize &&
+        y >= centerY - handleSize &&
+        y <= centerY + handleSize
+      ) {
+        setResizingField(pos.field);
+        setResizeHandle('left');
+        setResizeStart({ x: pos.x, width: boxWidth });
+        e.preventDefault();
+        return;
+      }
+      
+      // Check right handle
+      if (
+        x >= pos.x + boxWidth - handleSize &&
+        x <= pos.x + boxWidth + handleSize &&
+        y >= centerY - handleSize &&
+        y <= centerY + handleSize
+      ) {
+        setResizingField(pos.field);
+        setResizeHandle('right');
+        setResizeStart({ x: pos.x, width: boxWidth });
+        e.preventDefault();
+        return;
+      }
+    }
+
+    // Check if clicked near any enabled text position (for dragging)
     const clickedField = enabledPositions.find((pos) => {
       const fontSize = pos.fontSize || 48;
-      const metrics = ctx.measureText(pos.label);
-      const textWidth = metrics.width;
-      const textHeight = fontSize;
+      const boxWidth = pos.width || (canvas.width - pos.x - 40);
+      const boxHeight = fontSize * 2.5;
       
-      // Check if click is within text bounding box
+      // Check if click is within text box
       return (
-        x >= pos.x - 5 &&
-        x <= pos.x + textWidth + 5 &&
+        x >= pos.x &&
+        x <= pos.x + boxWidth &&
         y >= pos.y - fontSize &&
         y <= pos.y + 10
       );
@@ -279,11 +345,39 @@ export default function CreateCampaignPage() {
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!draggingField || !canvasRef.current) return;
+    if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    // Handle resizing
+    if (resizingField && resizeHandle) {
+      const dx = x - resizeStart.x;
+      
+      setTextPositions((prev) =>
+        prev.map((pos) => {
+          if (pos.field !== resizingField) return pos;
+          
+          const currentWidth = pos.width || (canvas.width - pos.x - 40);
+          
+          if (resizeHandle === 'left') {
+            // Moving left edge: adjust x and width
+            const newX = Math.max(0, resizeStart.x + dx);
+            const newWidth = resizeStart.width - (newX - resizeStart.x);
+            return { ...pos, x: newX, width: Math.max(50, newWidth) };
+          } else {
+            // Moving right edge: just adjust width
+            const newWidth = Math.max(50, resizeStart.width + dx);
+            return { ...pos, width: newWidth };
+          }
+        })
+      );
+      return;
+    }
+
+    // Handle dragging
+    if (!draggingField) return;
 
     setTextPositions((prev) =>
       prev.map((pos) =>
@@ -294,6 +388,8 @@ export default function CreateCampaignPage() {
 
   const handleCanvasMouseUp = () => {
     setDraggingField(null);
+    setResizingField(null);
+    setResizeHandle(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
