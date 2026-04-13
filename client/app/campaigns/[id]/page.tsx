@@ -201,12 +201,13 @@ export default function CampaignPage() {
   }, [campaign, photoPreview, photoScale, photoPosition, name, designation, location]);
 
   // Draw text with wrapping to fit within maxWidth
-  const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) => {
+  const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, align: 'left' | 'center' | 'right' = 'left') => {
     const words = text.split(' ');
     let line = '';
     let currentY = y;
     const maxLines = 2; // Maximum 2 lines
     let lineCount = 0;
+    const lines: string[] = [];
 
     for (let i = 0; i < words.length; i++) {
       const testLine = line + words[i] + ' ';
@@ -214,27 +215,48 @@ export default function CampaignPage() {
       const testWidth = metrics.width;
 
       if (testWidth > maxWidth && i > 0) {
-        // Draw current line
-        ctx.fillText(line.trim(), x, currentY);
+        // Store current line
+        lines.push(line.trim());
         line = words[i] + ' ';
-        currentY += lineHeight;
         lineCount++;
         
         // If we've reached max lines, stop
         if (lineCount >= maxLines) {
           // Add ellipsis if there are more words
           if (i < words.length) {
-            ctx.fillText(line.trim() + '...', x, currentY);
+            lines.push(line.trim() + '...');
           }
-          return;
+          break;
         }
       } else {
         line = testLine;
       }
     }
     
-    // Draw the last line
-    ctx.fillText(line.trim(), x, currentY);
+    // Add the last line
+    if (line.trim()) {
+      lines.push(line.trim());
+    }
+    
+    // Draw all lines with proper alignment
+    ctx.textAlign = align;
+    ctx.textBaseline = 'top';
+    
+    lines.forEach((lineText, index) => {
+      let drawX = x;
+      
+      if (align === 'center') {
+        drawX = x + maxWidth / 2;
+      } else if (align === 'right') {
+        drawX = x + maxWidth;
+      }
+      
+      ctx.fillText(lineText, drawX, currentY + (index * lineHeight));
+    });
+    
+    // Reset alignment
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   };
 
   const drawText = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, positions: TextPosition[]) => {
@@ -274,8 +296,11 @@ export default function CampaignPage() {
         // Calculate max width (canvas width - x position - margin)
         const maxWidth = canvas.width - pos.x - 40; // 40px margin from right edge
         
+        // Get text alignment (default to left)
+        const textAlign = pos.textAlign || 'left';
+        
         // Draw text with wrapping
-        drawWrappedText(ctx, text, pos.x, pos.y, maxWidth, fontSize);
+        drawWrappedText(ctx, text, pos.x, pos.y, maxWidth, fontSize, textAlign);
         
         // Reset shadow
         ctx.shadowColor = 'transparent';

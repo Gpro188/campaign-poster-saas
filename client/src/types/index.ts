@@ -8,6 +8,7 @@ export interface TextPosition {
   color?: string;
   isBold?: boolean;
   enabled?: boolean; // Whether this field should be shown to users
+  textAlign?: 'left' | 'center' | 'right'; // Text alignment
 }
 
 export interface CropShape {

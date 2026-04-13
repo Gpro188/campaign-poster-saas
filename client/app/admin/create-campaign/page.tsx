@@ -15,6 +15,7 @@ interface DraggableText {
   color?: string;
   isBold?: boolean;
   enabled?: boolean;
+  textAlign?: 'left' | 'center' | 'right';
 }
 
 export default function CreateCampaignPage() {
@@ -673,6 +674,62 @@ export default function CreateCampaignPage() {
                             }}
                             className="w-full h-7 border rounded cursor-pointer"
                           />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Text Alignment</label>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTextPositions((prev) =>
+                                prev.map((p) =>
+                                  p.field === pos.field ? { ...p, textAlign: 'left' } : p
+                                )
+                              );
+                            }}
+                            className={`flex-1 px-2 py-1 text-xs border rounded ${
+                              pos.textAlign === 'left' || !pos.textAlign
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-700'
+                            }`}
+                          >
+                            Left
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTextPositions((prev) =>
+                                prev.map((p) =>
+                                  p.field === pos.field ? { ...p, textAlign: 'center' } : p
+                                )
+                              );
+                            }}
+                            className={`flex-1 px-2 py-1 text-xs border rounded ${
+                              pos.textAlign === 'center'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-700'
+                            }`}
+                          >
+                            Center
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTextPositions((prev) =>
+                                prev.map((p) =>
+                                  p.field === pos.field ? { ...p, textAlign: 'right' } : p
+                                )
+                              );
+                            }}
+                            className={`flex-1 px-2 py-1 text-xs border rounded ${
+                              pos.textAlign === 'right'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white text-gray-700'
+                            }`}
+                          >
+                            Right
+                          </button>
                         </div>
                       </div>
                     </div>
