@@ -597,6 +597,22 @@ export default function CreateCampaignPage() {
                     </div>
                     <div className="space-y-2">
                       <div>
+                        <label className="text-xs text-gray-500">Field Label (what users see)</label>
+                        <input
+                          type="text"
+                          value={pos.label}
+                          onChange={(e) => {
+                            setTextPositions((prev) =>
+                              prev.map((p) =>
+                                p.field === pos.field ? { ...p, label: e.target.value } : p
+                              )
+                            );
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                          placeholder={pos.field === 'name' ? 'e.g., Student Name, Member Name' : pos.field === 'designation' ? 'e.g., Position, Role' : 'e.g., City, Branch'}
+                        />
+                      </div>
+                      <div>
                         <label className="text-xs text-gray-500">Position</label>
                         <div className="flex gap-2">
                           <input

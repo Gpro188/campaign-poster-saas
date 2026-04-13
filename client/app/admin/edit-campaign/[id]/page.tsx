@@ -69,13 +69,13 @@ export default function EditCampaignPage() {
         if (data.textPositions && data.textPositions.length > 0) {
           const loadedPositions: DraggableText[] = data.textPositions.map((pos: TextPosition) => ({
             field: pos.field,
-            label: pos.field.charAt(0).toUpperCase() + pos.field.slice(1),
+            label: pos.label || pos.field.charAt(0).toUpperCase() + pos.field.slice(1), // Use saved label or default
             x: pos.x,
             y: pos.y,
             fontSize: pos.fontSize || 48,
             color: pos.color || '#FFFFFF',
             isBold: pos.isBold !== undefined ? pos.isBold : pos.field === 'name',
-            enabled: true,
+            enabled: pos.enabled !== false, // Load enabled status from database
           }));
           setTextPositions(loadedPositions);
         }
@@ -472,6 +472,22 @@ export default function EditCampaignPage() {
                       </label>
                     </div>
                     <div className="space-y-2">
+                      <div>
+                        <label className="text-xs text-gray-500">Field Label (what users see)</label>
+                        <input
+                          type="text"
+                          value={pos.label}
+                          onChange={(e) => {
+                            setTextPositions((prev) =>
+                              prev.map((p) =>
+                                p.field === pos.field ? { ...p, label: e.target.value } : p
+                              )
+                            );
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                          placeholder={pos.field === 'name' ? 'e.g., Student Name, Member Name' : pos.field === 'designation' ? 'e.g., Position, Role' : 'e.g., City, Branch'}
+                        />
+                      </div>
                       <div>
                         <label className="text-xs text-gray-500">Position</label>
                         <div className="flex gap-2">

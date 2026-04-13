@@ -953,49 +953,49 @@ export default function CampaignPage() {
             )}
 
             <div className="space-y-4 max-w-md mx-auto">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter your name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Designation
-                </label>
-                <input
-                  type="text"
-                  value={designation}
-                  onChange={(e) => setDesignation(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., Volunteer, Supporter"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., New York, USA"
-                />
-              </div>
+              {campaign.textPositions
+                .filter((pos) => pos.enabled !== false) // Only show enabled fields
+                .map((pos) => {
+                  // Determine which state to use based on field type
+                  const isName = pos.field === 'name';
+                  const isDesignation = pos.field === 'designation';
+                  const isLocation = pos.field === 'location';
+                  
+                  const value = isName ? name : isDesignation ? designation : location;
+                  const setValue = isName ? setName : isDesignation ? setDesignation : setLocation;
+                  
+                  // Custom labels or defaults
+                  const label = pos.label || (isName ? 'Name' : isDesignation ? 'Designation' : 'Location');
+                  const placeholder = isName ? 'Enter your name' : isDesignation ? 'e.g., Volunteer, Supporter' : 'e.g., New York, USA';
+                  const required = isName; // Only name is required
+                  
+                  return (
+                    <div key={pos.field}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {label} {required && '*'}
+                      </label>
+                      <input
+                        type="text"
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder={placeholder}
+                        required={required}
+                      />
+                    </div>
+                  );
+                })}
             </div>
 
             <div className="space-y-4 mt-8">
               <button
                 onClick={async () => {
-                  if (!name) {
+                  // Check if name field is enabled and filled
+                  const nameFieldEnabled = campaign.textPositions.some(
+                    (pos) => pos.field === 'name' && pos.enabled !== false
+                  );
+                  
+                  if (nameFieldEnabled && !name) {
                     alert('Please enter your name!');
                     return;
                   }
@@ -1026,7 +1026,12 @@ export default function CampaignPage() {
                     setGenerating(false);
                   }
                 }}
-                disabled={!name || generating}
+                disabled={(() => {
+                  const nameFieldEnabled = campaign.textPositions.some(
+                    (pos) => pos.field === 'name' && pos.enabled !== false
+                  );
+                  return (nameFieldEnabled && !name) || generating || (!croppedPhoto && !photoPreview);
+                })()}
                 className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
               >
                 {generating ? (

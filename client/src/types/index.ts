@@ -1,11 +1,13 @@
 export interface TextPosition {
   field: 'name' | 'designation' | 'location';
+  label?: string; // Display label for the field (e.g., "Student Name", "Institution")
   x: number;
   y: number;
   fontSize?: number;
   fontFamily?: string;
   color?: string;
   isBold?: boolean;
+  enabled?: boolean; // Whether this field should be shown to users
 }
 
 export interface CropShape {
