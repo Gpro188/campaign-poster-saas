@@ -1,34 +1,6 @@
 const Poster = require('../models/Poster');
 const Campaign = require('../models/Campaign');
-const multer = require('multer');
-const path = require('path');
-
-// Configure multer for photo uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (extname && mimetype) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
-  }
-});
+const { upload } = require('../config/cloudinary');
 
 // Create a new poster
 const createPoster = async (req, res) => {
@@ -50,8 +22,8 @@ const createPoster = async (req, res) => {
       supporterName,
       designation,
       location,
-      uploadedPhotoUrl: `/uploads/${req.file.filename}`,
-      generatedImageUrl: generatedImageUrl || `/uploads/${req.file.filename}`
+      uploadedPhotoUrl: req.file.path, // Cloudinary URL
+      generatedImageUrl: generatedImageUrl || req.file.path // Cloudinary URL
     };
 
     const poster = new Poster(posterData);

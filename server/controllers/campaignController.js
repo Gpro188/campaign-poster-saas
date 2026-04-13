@@ -1,33 +1,5 @@
 const Campaign = require('../models/Campaign');
-const multer = require('multer');
-const path = require('path');
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'frame-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ 
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    
-    if (extname && mimetype) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
-  }
-});
+const { upload } = require('../config/cloudinary');
 
 // Create a new campaign
 const createCampaign = async (req, res) => {
@@ -50,7 +22,7 @@ const createCampaign = async (req, res) => {
     const campaignData = {
       title,
       description,
-      frameImageUrl: `/uploads/${req.file.filename}`,
+      frameImageUrl: req.file.path, // Cloudinary URL
       ownerId: ownerId || 'admin',
       textPositions: textPositions ? JSON.parse(textPositions) : [],
       startDate: start,
@@ -171,7 +143,7 @@ const updateCampaign = async (req, res) => {
 
     // Handle new frame image upload
     if (req.file) {
-      updateData.frameImageUrl = `/uploads/${req.file.filename}`;
+      updateData.frameImageUrl = req.file.path; // Cloudinary URL
     }
 
     const campaign = await Campaign.findByIdAndUpdate(id, updateData, { 
