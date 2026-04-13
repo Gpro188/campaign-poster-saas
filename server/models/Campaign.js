@@ -104,6 +104,10 @@ const campaignSchema = new mongoose.Schema({
   isSubscriptionActive: {
     type: Boolean,
     default: true
+  },
+  contactNumber: {
+    type: String,
+    trim: true
   }
 }, {
   timestamps: true

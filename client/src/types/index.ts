@@ -29,6 +29,7 @@ export interface Campaign {
   status: 'active' | 'inactive';
   ownerId: string;
   posterCount: number;
+  contactNumber?: string;
   createdAt: string;
   updatedAt: string;
 }
