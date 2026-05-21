@@ -1255,13 +1255,9 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                     }
                   }
                   
-                  // Fallback: Share text with campaign link and frame image
-                  const frameUrl = campaign.frameImageUrl.startsWith('http') 
-                    ? campaign.frameImageUrl 
-                    : `${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')}${campaign.frameImageUrl}`;
-                  
+                  // Fallback: Share text with campaign link
                   const message = encodeURIComponent(
-                    `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your campaign poster now! 👇\n${campaignUrl}\n\n🖼️ Campaign Frame:\n${frameUrl}`
+                    `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your campaign poster now! 👇\n${campaignUrl}`
                   );
                   const url = `https://wa.me/?text=${message}`;
                   window.open(url, '_blank');

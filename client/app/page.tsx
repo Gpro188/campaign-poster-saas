@@ -137,12 +137,8 @@ export default function Home() {
                         onClick={(e) => {
                           e.stopPropagation();
                           const campaignUrl = `${window.location.origin}/campaigns/${campaign._id}`;
-                          const frameUrl = campaign.frameImageUrl.startsWith('http') 
-                            ? campaign.frameImageUrl 
-                            : `${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')}${campaign.frameImageUrl}`;
-                          
                           const message = encodeURIComponent(
-                            `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your campaign poster now! 👇\n${campaignUrl}\n\n🖼️ Campaign Frame:\n${frameUrl}`
+                            `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your campaign poster now! 👇\n${campaignUrl}`
                           );
                           window.open(`https://wa.me/?text=${message}`, '_blank');
                         }}
