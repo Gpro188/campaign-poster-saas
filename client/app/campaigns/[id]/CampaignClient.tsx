@@ -35,6 +35,14 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
   const [photoRotation, setPhotoRotation] = useState(0); // in degrees: 0, 90, 180, 270
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Touch gesture refs for mobile pinch-to-zoom and dragging
+  const touchStartDistRef = useRef<number | null>(null);
+  const touchStartScaleRef = useRef<number>(1);
+  const touchStartMidpointRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartPhotoPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const touchStartSingleRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartPhotoPosSingleRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   
   // Crop workflow states
   const [step, setStep] = useState<'upload' | 'crop' | 'details' | 'done'>('upload');
@@ -523,6 +531,19 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
     img.src = photoPreview;
   };
 
+  // Auto-scroll to crop container when step transitions to 'crop'
+  useEffect(() => {
+    if (step === 'crop') {
+      const timer = setTimeout(() => {
+        const cropContainer = document.getElementById('crop-section-container');
+        if (cropContainer) {
+          cropContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 150); // Small delay to ensure render is complete
+      return () => clearTimeout(timer);
+    }
+  }, [step]);
+
   // Draw photo on crop canvas when step changes to 'crop'
   useEffect(() => {
     if (step === 'crop' && photoPreview && cropCanvasRef.current && campaign) {
@@ -634,56 +655,29 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
     }
   }, [step, photoPreview, photoScale, photoPosition, photoRotation, campaign]);
 
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!photoPreview || !cropCanvasRef.current) return;
-    
-    // Prevent default to stop scrolling on mobile
-    if ('touches' in e) {
-      e.preventDefault();
-    }
     
     setIsDragging(true);
     
-    let clientX, clientY;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
     const rect = e.currentTarget.getBoundingClientRect();
     setDragStart({
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
     });
   };
 
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !cropCanvasRef.current) return;
     
-    if ('touches' in e) {
-      e.preventDefault();
-    }
-    
-    let clientX, clientY;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
-    }
-    
     const rect = e.currentTarget.getBoundingClientRect();
-    const currentX = clientX - rect.left;
-    const currentY = clientY - rect.top;
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
     
     const dx = currentX - dragStart.x;
     const dy = currentY - dragStart.y;
     
-    // Use requestAnimationFrame for smoother performance on mobile
+    // Use requestAnimationFrame for smoother performance
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
@@ -700,6 +694,143 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
 
   const handleCanvasMouseUp = () => {
     setIsDragging(false);
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+  };
+
+  // Dedicated mobile touch gesture handlers for smooth drag & pinch-to-zoom
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!photoPreview || !cropCanvasRef.current) return;
+    
+    // Prevent default scroll behaviors on the crop canvas
+    e.preventDefault();
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    if (e.touches.length === 1) {
+      // Single touch: Drag/Pan photo
+      touchStartSingleRef.current = {
+        x: e.touches[0].clientX - rect.left,
+        y: e.touches[0].clientY - rect.top
+      };
+      touchStartPhotoPosSingleRef.current = { ...photoPosition };
+      
+      // Reset pinch zoom state refs
+      touchStartDistRef.current = null;
+      touchStartMidpointRef.current = null;
+    } else if (e.touches.length === 2) {
+      // Two-finger pinch: Zoom and optional center movement
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      touchStartDistRef.current = dist;
+      touchStartScaleRef.current = photoScale;
+      
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+      touchStartMidpointRef.current = {
+        x: midX - rect.left,
+        y: midY - rect.top
+      };
+      touchStartPhotoPosRef.current = { ...photoPosition };
+      
+      // Reset single touch drag state refs
+      touchStartSingleRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (!photoPreview || !cropCanvasRef.current) return;
+    
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    
+    if (e.touches.length === 1) {
+      // Single touch: Smooth drag calculation
+      if (!touchStartSingleRef.current) {
+        touchStartSingleRef.current = {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
+        };
+        touchStartPhotoPosSingleRef.current = { ...photoPosition };
+      }
+      
+      const curX = e.touches[0].clientX - rect.left;
+      const curY = e.touches[0].clientY - rect.top;
+      const dx = curX - touchStartSingleRef.current.x;
+      const dy = curY - touchStartSingleRef.current.y;
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setPhotoPosition({
+          x: touchStartPhotoPosSingleRef.current.x + dx,
+          y: touchStartPhotoPosSingleRef.current.y + dy
+        });
+      });
+      
+    } else if (e.touches.length === 2) {
+      // Two-finger pinch to zoom & move
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      
+      const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      
+      if (touchStartDistRef.current === null) {
+        touchStartDistRef.current = currentDist;
+        touchStartScaleRef.current = photoScale;
+        
+        const midX = (t1.clientX + t2.clientX) / 2;
+        const midY = (t1.clientY + t2.clientY) / 2;
+        touchStartMidpointRef.current = {
+          x: midX - rect.left,
+          y: midY - rect.top
+        };
+        touchStartPhotoPosRef.current = { ...photoPosition };
+      }
+      
+      const scaleFactor = currentDist / touchStartDistRef.current;
+      const newScale = Math.min(3, Math.max(0.1, touchStartScaleRef.current * scaleFactor));
+      
+      const midX = (t1.clientX + t2.clientX) / 2;
+      const midY = (t1.clientY + t2.clientY) / 2;
+      const currentMid = {
+        x: midX - rect.left,
+        y: midY - rect.top
+      };
+      
+      let dx = 0;
+      let dy = 0;
+      if (touchStartMidpointRef.current) {
+        dx = currentMid.x - touchStartMidpointRef.current.x;
+        dy = currentMid.y - touchStartMidpointRef.current.y;
+      }
+      
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      animationFrameRef.current = requestAnimationFrame(() => {
+        setPhotoScale(Number(newScale.toFixed(2)));
+        setPhotoPosition({
+          x: touchStartPhotoPosRef.current.x + dx,
+          y: touchStartPhotoPosRef.current.y + dy
+        });
+      });
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    // Reset touch refs to prevent jumpiness on subsequent touches
+    touchStartSingleRef.current = null;
+    touchStartDistRef.current = null;
+    touchStartMidpointRef.current = null;
+    
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -1210,7 +1341,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
 
         {/* Step 2: Crop */}
         {step === 'crop' && (
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8 max-w-xl mx-auto">
+          <div id="crop-section-container" className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8 max-w-xl mx-auto scroll-mt-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Adjust Your Photo</h2>
             <p className="text-center text-gray-500 mb-6 text-sm">
               Drag your photo or use the controls below to position, zoom, and rotate it perfectly.
@@ -1224,10 +1355,10 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                 onMouseMove={handleCanvasMouseMove}
                 onMouseUp={handleCanvasMouseUp}
                 onMouseLeave={handleCanvasMouseUp}
-                onTouchStart={handleCanvasMouseDown}
-                onTouchMove={handleCanvasMouseMove}
-                onTouchEnd={handleCanvasMouseUp}
-                onTouchCancel={handleCanvasMouseUp}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
                 className="border border-gray-200 rounded-xl cursor-move shadow-md max-w-full"
                 style={{ 
                   touchAction: 'none',
