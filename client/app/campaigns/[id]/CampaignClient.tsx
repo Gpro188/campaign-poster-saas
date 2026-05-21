@@ -1036,7 +1036,6 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                 </label>
               </div>
             </div>
-          </div>
         )}
 
         {/* Step 2: Crop */}
@@ -1209,7 +1208,6 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                 </div>
               </div>
             </div>
-          </div>
         )}
 
         {/* Thank You / Done Screen */}
