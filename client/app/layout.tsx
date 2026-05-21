@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Campaign Wave | Grassroots Marketing & Activation",
+  title: "Dpro Campaigns | Grassroots Marketing & Activation",
   description: "Engage, Mobilize, and Win: All-in-One Tools for Grassroots Campaigns",
 };
 

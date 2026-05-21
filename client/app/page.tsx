@@ -120,7 +120,7 @@ export default function Home() {
               </svg>
             </div>
             <span className="text-white font-extrabold text-2xl tracking-tight">
-              Campaign <span className="text-emerald-400">Wave</span>
+              Dpro <span className="text-emerald-400">Campaigns</span>
             </span>
           </Link>
 
@@ -128,12 +128,7 @@ export default function Home() {
           <nav className="hidden md:flex items-center gap-8">
             <Link href="#campaigns" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Home</Link>
             <a href="#features" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Features</a>
-            <a href="#success" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Success Stories</a>
-            <a href="#pricing" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Pricing</a>
             <Link href="/dashboard" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Login</Link>
-            <Link href="/dashboard" className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-5 py-2.5 rounded-full transition-all hover:shadow-lg hover:shadow-emerald-500/20 active:scale-95">
-              Join Us
-            </Link>
           </nav>
 
           {/* Simple Mobile Menu Trigger */}
@@ -187,7 +182,7 @@ export default function Home() {
                 ✨ Empowering Grassroots Mobilization
               </span>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-[1.1]">
-                Launch Your Next <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400">Movement</span> With Campaign Wave
+                Launch Your Next <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-blue-400">Movement</span> With Dpro Campaigns
               </h1>
               <p className="text-lg sm:text-xl text-gray-300 mb-8 font-normal leading-relaxed max-w-xl">
                 Engage, Mobilize, and Win: All-in-One Tools for Grassroots Campaigns. Create instantly shareable campaign materials that amplify your community presence.
@@ -353,12 +348,12 @@ export default function Home() {
               </svg>
             </div>
             <span className="text-white font-bold text-lg tracking-tight">
-              Campaign <span className="text-emerald-400">Wave</span>
+              Dpro <span className="text-emerald-400">Campaigns</span>
             </span>
           </div>
           
           <p className="text-sm">
-            © 2026 Campaign Wave SaaS. Built for active mobilization. All rights reserved.
+            © 2026 Dpro Campaigns SaaS. Built for active mobilization. All rights reserved.
           </p>
           
           <div className="flex gap-6 text-sm">

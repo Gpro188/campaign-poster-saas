@@ -407,39 +407,38 @@ export default function CreateCampaignPage() {
     setError('');
 
     try {
-      const formData = new FormData();
-      formData.append('frame', frameImage);
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('ownerId', 'admin');
-      formData.append('startDate', startDate);
-      formData.append('endDate', endDate);
-      formData.append(
-        'textPositions',
-        JSON.stringify(
-          textPositions
-            .filter(pos => pos.enabled !== false) // Only save enabled positions
-            .map(({ field, x, y, fontSize, color, isBold }) => ({
-              field,
-              x,
-              y,
-              fontSize,
-              color,
-              isBold,
-            }))
-        )
-      );
+      const message = `*New Campaign Request for Dpro Campaigns!* 🚀\n\n*Title:* ${title}\n*Description:* ${description || 'N/A'}\n*Duration:* ${startDate} to ${endDate}\n\n*Important:* I agree to the campaign offer price of 100 rupees per month. Please review my frame and approve my campaign!`;
+      
+      const adminWhatsAppNumber = '918592888137';
 
-      // Add cropShape if exists
-      if (cropShape) {
-        formData.append('cropShape', JSON.stringify(cropShape));
+      if (navigator.share) {
+        try {
+          const fileList = [
+            new File([frameImage], frameImage.name, {
+              type: frameImage.type,
+            }),
+          ];
+          await navigator.share({
+            title: 'New Campaign Request',
+            text: message,
+            files: fileList,
+          });
+          alert('Request shared successfully!');
+          router.push('/dashboard');
+        } catch (shareErr: any) {
+          console.error('Error sharing:', shareErr);
+          // Fallback if sharing fails or was cancelled
+          const encodedMessage = encodeURIComponent(message + '\n\n(Note: Please send the frame image manually as this browser does not support automatic image attachment).');
+          window.open(`https://wa.me/${adminWhatsAppNumber}?text=${encodedMessage}`, '_blank');
+          alert('Opened WhatsApp. Please remember to attach your frame image!');
+        }
+      } else {
+        const encodedMessage = encodeURIComponent(message + '\n\n(Note: Please send the frame image manually as this browser does not support automatic image attachment).');
+        window.open(`https://wa.me/${adminWhatsAppNumber}?text=${encodedMessage}`, '_blank');
+        alert('Opened WhatsApp. Please remember to attach your frame image!');
       }
-
-      await campaignAPI.create(formData);
-      alert('Campaign created successfully!');
-      router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create campaign');
+      setError(err.message || 'Failed to request campaign');
     } finally {
       setIsSubmitting(false);
     }
@@ -848,7 +847,7 @@ export default function CreateCampaignPage() {
               className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               <Save className="w-5 h-5" />
-              {isSubmitting ? 'Creating...' : 'Create Campaign'}
+              {isSubmitting ? 'Requesting...' : 'Request Approval via WhatsApp'}
             </button>
             <button
               type="button"

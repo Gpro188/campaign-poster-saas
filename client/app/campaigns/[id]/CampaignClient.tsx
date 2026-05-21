@@ -948,7 +948,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
             onClick={() => router.push('/')}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-sm shadow-emerald-600/10"
           >
-            Return to Campaign Wave
+            Return to Dpro Campaigns
           </button>
         </div>
       </div>
