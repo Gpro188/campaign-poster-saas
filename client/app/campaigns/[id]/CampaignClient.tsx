@@ -133,13 +133,15 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
   }, [photoPreview, croppedPhoto]);
 
   useEffect(() => {
-    if (campaign) return; // Skip if pre-fetched on server
     const loadCampaign = async () => {
       try {
         const data = await campaignAPI.getById(params.id as string);
         setCampaign(data);
       } catch (err: any) {
-        setError(err.response?.data?.message || 'Failed to load campaign');
+        console.error('Failed to load live campaign details:', err);
+        if (!campaign) {
+          setError(err.response?.data?.message || 'Failed to load campaign');
+        }
       } finally {
         setLoading(false);
       }
@@ -148,7 +150,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
     if (params.id) {
       loadCampaign();
     }
-  }, [params.id, campaign]);
+  }, [params.id]);
 
   // Draw canvas instantly using cached images
   useEffect(() => {
@@ -882,6 +884,8 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
       
       await posterAPI.create(formData);
       console.log('Poster saved to backend successfully');
+      // Immediately update local poster count state
+      setCampaign(prev => prev ? { ...prev, posterCount: (prev.posterCount || 0) + 1 } : null);
     } catch (saveErr) {
       console.warn('Failed to save poster to backend:', saveErr);
     }

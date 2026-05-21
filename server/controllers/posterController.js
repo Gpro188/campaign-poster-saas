@@ -29,9 +29,8 @@ const createPoster = async (req, res) => {
     const poster = new Poster(posterData);
     await poster.save();
 
-    // Increment campaign poster count
-    campaign.posterCount += 1;
-    await campaign.save();
+    // Increment campaign poster count atomically
+    await Campaign.findByIdAndUpdate(campaignId, { $inc: { posterCount: 1 } });
 
     res.status(201).json({
       message: 'Poster created successfully',
