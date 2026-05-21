@@ -10,8 +10,31 @@ const api = axios.create({
   },
 });
 
+// Add request interceptor to attach JWT token
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('admin_token='))
+        ?.split('=')[1];
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // Campaign APIs
 export const campaignAPI = {
+  getAdminAll: async (): Promise<Campaign[]> => {
+    const response = await api.get('/campaigns/admin/all');
+    return response.data.campaigns;
+  },
   create: async (formData: FormData): Promise<Campaign> => {
     const response = await api.post('/campaigns', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -77,5 +100,18 @@ export const posterAPI = {
   incrementShare: async (id: string): Promise<Poster> => {
     const response = await api.post(`/posters/${id}/share`);
     return response.data.poster;
+  },
+};
+
+// Auth APIs
+export const authAPI = {
+  login: async (username: string, password: string): Promise<{ token: string; admin: { id: string; username: string } }> => {
+    const response = await api.post('/admin/login', { username, password });
+    return response.data;
+  },
+
+  changePassword: async (oldPassword: string, newPassword: string): Promise<{ message: string }> => {
+    const response = await api.post('/admin/change-password', { oldPassword, newPassword });
+    return response.data;
   },
 };

@@ -275,7 +275,7 @@ export default function Home() {
           ) : (
             <div
               ref={carouselRef}
-              className="flex gap-6 overflow-x-auto scrollbar-none pb-6 snap-x snap-mandatory touch-pan-x"
+              className="flex gap-6 overflow-x-auto scrollbar-none pb-6 snap-x snap-mandatory"
             >
               {allCampaignsToDisplay.map((campaign) => {
                 const isSample = campaign._id.startsWith('sample');

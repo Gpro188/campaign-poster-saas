@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { campaignAPI, posterAPI } from '@/lib/api';
+import { campaignAPI, posterAPI, authAPI } from '@/lib/api';
 import { Campaign, Poster } from '@/types';
 import { BarChart3, Users, Download, Trash2, Edit, Plus } from 'lucide-react';
 import Link from 'next/link';
@@ -18,6 +18,55 @@ export default function DashboardPage() {
     totalPosters: 0,
   });
 
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+
+  const handleLogout = () => {
+    document.cookie = 'admin_token=; path=/; max-age=0; SameSite=Lax; Secure';
+    localStorage.removeItem('isAdmin');
+    router.push('/login');
+    router.refresh();
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters long');
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      await authAPI.changePassword(oldPassword, newPassword);
+      setPasswordSuccess('Password updated successfully! Logging out...');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        handleLogout();
+      }, 2000);
+    } catch (err: any) {
+      console.error(err);
+      setPasswordError(
+        err.response?.data?.message || 'Failed to update password. Please verify your current password.'
+      );
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
   useEffect(() => {
     // Set admin flag in localStorage
     localStorage.setItem('isAdmin', 'true');
@@ -26,11 +75,11 @@ export default function DashboardPage() {
       try {
         const [campaignsData, postersData] = await Promise.all([
           // Use admin endpoint to get ALL campaigns (including expired)
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns/admin/all`).then(res => res.json()),
+          campaignAPI.getAdminAll(),
           posterAPI.getAll(100),
         ]);
 
-        const campaignsWithActiveStatus = campaignsData.campaigns.map((c: any) => ({
+        const campaignsWithActiveStatus = campaignsData.map((c: any) => ({
           ...c,
           isCurrentlyActive: c.isCurrentlyActive || false
         }));
@@ -39,8 +88,8 @@ export default function DashboardPage() {
         setPosters(postersData.posters);
         
         setStats({
-          totalCampaigns: campaignsData.campaigns.length,
-          activeCampaigns: campaignsData.campaigns.filter((c: any) => c.isCurrentlyActive).length,
+          totalCampaigns: campaignsData.length,
+          activeCampaigns: campaignsData.filter((c: any) => c.isCurrentlyActive).length,
           totalPosters: postersData.total,
         });
       } catch (error) {
@@ -84,15 +133,23 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-          <Link
-            href="/admin/create-campaign"
-            className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-md"
-          >
-            <Plus className="w-5 h-5" />
-            Create Campaign
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 border border-gray-300 bg-white text-gray-700 px-5 py-3 rounded-lg hover:bg-gray-50 hover:border-gray-400 font-medium transition-all shadow-xs cursor-pointer animate-fadeIn"
+            >
+              Logout
+            </button>
+            <Link
+              href="/admin/create-campaign"
+              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-md"
+            >
+              <Plus className="w-5 h-5" />
+              Create Campaign
+            </Link>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -274,6 +331,80 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Change Password Form */}
+        <div className="mt-8 bg-white rounded-lg shadow overflow-hidden">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-900">Security Settings</h2>
+            <p className="text-sm text-gray-500 mt-1">Update your administrative credentials here.</p>
+          </div>
+          <div className="p-6 max-w-xl">
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900"
+                  placeholder="Enter current password"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900"
+                  placeholder="Enter new password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900"
+                  placeholder="Confirm new password"
+                />
+              </div>
+
+              {passwordError && (
+                <div className="p-3 rounded bg-red-50 text-red-700 text-sm">
+                  {passwordError}
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="p-3 rounded bg-green-50 text-green-700 text-sm">
+                  {passwordSuccess}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={updatingPassword}
+                className="bg-blue-600 text-white px-5 py-2.5 rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updatingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+            </form>
+          </div>
+        </div>
+
       </div>
     </div>
   );
