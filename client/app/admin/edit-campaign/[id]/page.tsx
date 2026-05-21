@@ -268,15 +268,20 @@ export default function EditCampaignPage() {
         )
       );
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns/${params.id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns/${params.id}`, {
         method: 'PUT',
         body: formData,
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to update campaign');
+      }
+
       alert('Campaign updated successfully!');
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to update campaign');
+      setError(err.message || 'Failed to update campaign');
     } finally {
       setIsSubmitting(false);
     }
@@ -356,6 +361,7 @@ export default function EditCampaignPage() {
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
+                  <option value="pending">Pending</option>
                 </select>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

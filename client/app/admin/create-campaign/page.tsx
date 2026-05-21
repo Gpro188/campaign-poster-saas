@@ -407,36 +407,56 @@ export default function CreateCampaignPage() {
     setError('');
 
     try {
-      const message = `*New Campaign Request for Dpro Campaigns!* 🚀\n\n*Title:* ${title}\n*Description:* ${description || 'N/A'}\n*Duration:* ${startDate} to ${endDate}\n\n*Important:* I agree to the campaign offer price of 100 rupees per month. Please review my frame and approve my campaign!`;
-      
-      const adminWhatsAppNumber = '918592888137';
-
-      if (navigator.share) {
-        try {
-          const fileList = [
-            new File([frameImage], frameImage.name, {
-              type: frameImage.type,
-            }),
-          ];
-          await navigator.share({
-            title: 'New Campaign Request',
-            text: message,
-            files: fileList,
-          });
-          alert('Request shared successfully!');
-          router.push('/dashboard');
-        } catch (shareErr: any) {
-          console.error('Error sharing:', shareErr);
-          // Fallback if sharing fails or was cancelled
-          const encodedMessage = encodeURIComponent(message + '\n\n(Note: Please send the frame image manually as this browser does not support automatic image attachment).');
-          window.open(`https://wa.me/${adminWhatsAppNumber}?text=${encodedMessage}`, '_blank');
-          alert('Opened WhatsApp. Please remember to attach your frame image!');
-        }
-      } else {
-        const encodedMessage = encodeURIComponent(message + '\n\n(Note: Please send the frame image manually as this browser does not support automatic image attachment).');
-        window.open(`https://wa.me/${adminWhatsAppNumber}?text=${encodedMessage}`, '_blank');
-        alert('Opened WhatsApp. Please remember to attach your frame image!');
+      // 1. Save campaign to the database
+      const formData = new FormData();
+      formData.append('frame', frameImage);
+      formData.append('title', title);
+      formData.append('description', description);
+      formData.append('startDate', startDate);
+      formData.append('endDate', endDate);
+      formData.append(
+        'textPositions',
+        JSON.stringify(
+          textPositions
+            .filter(pos => pos.enabled !== false)
+            .map(({ field, x, y, width, fontSize, color, isBold, textAlign }) => ({
+              field,
+              x,
+              y,
+              width,
+              fontSize,
+              color,
+              isBold,
+              textAlign,
+            }))
+        )
+      );
+      if (cropShape) {
+        formData.append('cropShape', JSON.stringify(cropShape));
       }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.message || 'Failed to request campaign');
+      }
+
+      const responseData = await response.json();
+      const campaignId = responseData?.campaign?._id || 'Unknown';
+
+      // 2. Notify the admin via WhatsApp
+      const adminWhatsAppNumber = '918592888137';
+      const message = `*New Campaign Request for Dpro Campaigns!* 🚀\n\n*Title:* ${title}\n*Description:* ${description || 'N/A'}\n*Duration:* ${startDate} to ${endDate}\n\n*Dashboard ID:* ${campaignId}\n\n*Important:* I agree to the campaign offer price of 100 rupees per month. Please review and approve my campaign from the admin dashboard!`;
+      
+      const encodedMessage = encodeURIComponent(message);
+      window.open(`https://wa.me/${adminWhatsAppNumber}?text=${encodedMessage}`, '_blank');
+      
+      alert('Campaign requested successfully! It is now pending approval in the dashboard.');
+      router.push('/');
     } catch (err: any) {
       setError(err.message || 'Failed to request campaign');
     } finally {

@@ -122,7 +122,7 @@ const updateCampaign = async (req, res) => {
 
     const updateData = {};
     if (title) updateData.title = title;
-    if (description) updateData.description = description;
+    if (description !== undefined) updateData.description = description;
     if (status) updateData.status = status;
     if (startDate) updateData.startDate = new Date(startDate);
     if (endDate) updateData.endDate = new Date(endDate);
