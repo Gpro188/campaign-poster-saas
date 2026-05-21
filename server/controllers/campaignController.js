@@ -1,4 +1,5 @@
 const Campaign = require('../models/Campaign');
+const Poster = require('../models/Poster');
 const { upload } = require('../config/cloudinary');
 
 // Create a new campaign
@@ -68,7 +69,12 @@ const getAllCampaigns = async (req, res) => {
       endDate: { $gte: now }
     }).sort({ createdAt: -1 });
     
-    res.json({ campaigns });
+    const campaignsWithCount = await Promise.all(campaigns.map(async (c) => {
+      const count = await Poster.countDocuments({ campaignId: c._id });
+      return { ...c.toObject(), posterCount: count };
+    }));
+    
+    res.json({ campaigns: campaignsWithCount });
   } catch (error) {
     console.error('Error fetching campaigns:', error);
     res.status(500).json({ message: 'Failed to fetch campaigns', error: error.message });
@@ -85,7 +91,10 @@ const getCampaignById = async (req, res) => {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
-    res.json({ campaign });
+    const count = await Poster.countDocuments({ campaignId: id });
+    const campaignObj = { ...campaign.toObject(), posterCount: count };
+
+    res.json({ campaign: campaignObj });
   } catch (error) {
     console.error('Error fetching campaign:', error);
     res.status(500).json({ message: 'Failed to fetch campaign', error: error.message });
@@ -98,14 +107,15 @@ const getAllAdminCampaigns = async (req, res) => {
     const now = new Date();
     const campaigns = await Campaign.find().sort({ createdAt: -1 });
     
-    // Add computed field for active status
-    const campaignsWithStatus = campaigns.map(c => {
+    // Add computed field for active status and dynamic poster count
+    const campaignsWithStatus = await Promise.all(campaigns.map(async (c) => {
       const isActive = c.status === 'active' && 
                       c.isSubscriptionActive !== false &&
                       now >= c.startDate && 
                       now <= c.endDate;
-      return { ...c.toObject(), isCurrentlyActive: isActive };
-    });
+      const count = await Poster.countDocuments({ campaignId: c._id });
+      return { ...c.toObject(), isCurrentlyActive: isActive, posterCount: count };
+    }));
     
     res.json({ campaigns: campaignsWithStatus });
   } catch (error) {
@@ -146,7 +156,7 @@ const updateCampaign = async (req, res) => {
       updateData.frameImageUrl = req.file.path; // Cloudinary URL
     }
 
-    const campaign = await Campaign.findByIdAndUpdate(id, updateData, { 
+        const campaign = await Campaign.findByIdAndUpdate(id, updateData, { 
       new: true,
       runValidators: true
     });
@@ -155,9 +165,12 @@ const updateCampaign = async (req, res) => {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
+    const count = await Poster.countDocuments({ campaignId: id });
+    const campaignObj = { ...campaign.toObject(), posterCount: count };
+
     res.json({
       message: 'Campaign updated successfully',
-      campaign
+      campaign: campaignObj
     });
   } catch (error) {
     console.error('Error updating campaign:', error);
@@ -192,14 +205,15 @@ const getCampaignStats = async (req, res) => {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
-    const Poster = require('../models/Poster');
     const totalPosters = await Poster.countDocuments({ campaignId: id });
     const recentPosters = await Poster.find({ campaignId: id })
       .sort({ createdAt: -1 })
       .limit(10);
 
+    const campaignObj = { ...campaign.toObject(), posterCount: totalPosters };
+
     res.json({
-      campaign,
+      campaign: campaignObj,
       totalPosters,
       recentPosters
     });

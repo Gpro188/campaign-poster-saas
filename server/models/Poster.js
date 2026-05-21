@@ -35,4 +35,7 @@ const posterSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Index for fast query of posters by campaign
+posterSchema.index({ campaignId: 1 });
+
 module.exports = mongoose.model('Poster', posterSchema);
