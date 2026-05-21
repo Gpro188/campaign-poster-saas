@@ -164,7 +164,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const cropShape = (campaign as any).cropShape;
-    const hasPhoto = !!(croppedPhoto || photoPreview);
+    const hasPhoto = !!croppedPhoto; // Only show photo in the live preview after cropping is confirmed
 
     if (hasPhoto && photoLoaded && photoImageRef.current) {
       const photoImg = photoImageRef.current;
