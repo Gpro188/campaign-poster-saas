@@ -355,7 +355,7 @@ export default function Home() {
           </div>
           
           <p className="text-sm">
-            © 2026 Dpro Campaigns SaaS. Built for active mobilization. All rights reserved.
+            © 2026 Dpro Technologies. All rights reserved.
           </p>
           
           <div className="flex gap-6 text-sm">
