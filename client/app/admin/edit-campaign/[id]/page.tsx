@@ -3,14 +3,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { campaignAPI } from '@/lib/api';
-import { TextPosition, Campaign } from '@/types';
-import { Upload, Save, X, Type, Move, Trash2 } from 'lucide-react';
+import { TextPosition, Campaign, CropShape } from '@/types';
+import { Upload, Save, X, Type, Move, Trash2, Circle, Square, Triangle } from 'lucide-react';
 
 interface DraggableText {
   field: 'name' | 'designation' | 'location';
   label: string;
   x: number;
   y: number;
+  width?: number; // Text box width for wrapping
   fontSize?: number;
   color?: string;
   isBold?: boolean;
@@ -36,8 +37,21 @@ export default function EditCampaignPage() {
     { field: 'location', label: 'Location', x: 100, y: 210, fontSize: 28, color: '#FFFFFF', isBold: false, enabled: true },
   ]);
   const [draggingField, setDraggingField] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [shapeDragOffset, setShapeDragOffset] = useState({ x: 0, y: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Resize state
+  const [resizingField, setResizingField] = useState<string | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<'left' | 'right' | null>(null);
+  const [resizeStart, setResizeStart] = useState({ x: 0, width: 0 });
+  
+  // Crop shape state
+  const [cropShape, setCropShape] = useState<CropShape | null>(null);
+  const [selectedShapeType, setSelectedShapeType] = useState<'none' | 'circle' | 'rectangle' | 'triangle'>('none');
+  const [draggingShape, setDraggingShape] = useState(false);
+  const [resizingShape, setResizingShape] = useState(false);
   
   // Subscription duration
   const [startDate, setStartDate] = useState('');
@@ -73,6 +87,7 @@ export default function EditCampaignPage() {
             label: pos.label || pos.field.charAt(0).toUpperCase() + pos.field.slice(1), // Use saved label or default
             x: pos.x,
             y: pos.y,
+            width: pos.width, // Load width
             fontSize: pos.fontSize || 48,
             color: pos.color || '#FFFFFF',
             isBold: pos.isBold !== undefined ? pos.isBold : pos.field === 'name',
@@ -80,6 +95,15 @@ export default function EditCampaignPage() {
             textAlign: pos.textAlign || 'left', // Load text alignment
           }));
           setTextPositions(loadedPositions);
+        }
+        
+        // Load crop shape
+        if (data.cropShape) {
+          setCropShape(data.cropShape);
+          setSelectedShapeType(data.cropShape.type || 'none');
+        } else {
+          setCropShape(null);
+          setSelectedShapeType('none');
         }
       } catch (err: any) {
         console.error('Failed to load campaign:', err);
@@ -94,80 +118,277 @@ export default function EditCampaignPage() {
     }
   }, [params.id]);
 
+  // Shape management functions
+  const handleShapeTypeChange = (shapeType: 'none' | 'circle' | 'rectangle' | 'triangle') => {
+    setSelectedShapeType(shapeType);
+    if (shapeType === 'none') {
+      setCropShape(null);
+    } else if ((framePreview || existingFrameUrl) && canvasRef.current) {
+      // Create default shape in center of canvas
+      const canvas = canvasRef.current;
+      const defaultWidth = (canvas.width || 800) * 0.3;
+      const defaultHeight = (canvas.height || 800) * 0.3;
+      setCropShape({
+        type: shapeType,
+        x: ((canvas.width || 800) - defaultWidth) / 2,
+        y: ((canvas.height || 800) - defaultHeight) / 2,
+        width: defaultWidth,
+        height: defaultHeight,
+        rotation: 0
+      });
+    }
+  };
+
+  const handleShapeMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!cropShape || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    // Check if clicking inside shape
+    if (
+      x >= cropShape.x &&
+      x <= cropShape.x + cropShape.width &&
+      y >= cropShape.y &&
+      y <= cropShape.y + cropShape.height
+    ) {
+      // Check if clicking near bottom-right corner for resize
+      const isNearCorner = 
+        Math.abs(x - (cropShape.x + cropShape.width)) < 20 &&
+        Math.abs(y - (cropShape.y + cropShape.height)) < 20;
+      
+      if (isNearCorner) {
+        setResizingShape(true);
+      } else {
+        setDraggingShape(true);
+        setShapeDragOffset({ x: x - cropShape.x, y: y - cropShape.y });
+      }
+      e.preventDefault();
+    }
+  };
+
+  const handleShapeMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if ((!draggingShape && !resizingShape) || !cropShape || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+
+    if (draggingShape) {
+      setCropShape(prev => prev ? {
+        ...prev,
+        x: x - shapeDragOffset.x,
+        y: y - shapeDragOffset.y
+      } : null);
+    } else if (resizingShape) {
+      setCropShape(prev => prev ? {
+        ...prev,
+        width: Math.max(50, x - prev.x),
+        height: Math.max(50, y - prev.y)
+      } : null);
+    }
+  };
+
+  const handleShapeMouseUp = () => {
+    setDraggingShape(false);
+    setResizingShape(false);
+  };
+
+  const drawCropShape = (ctx: CanvasRenderingContext2D, shape: CropShape) => {
+    ctx.save();
+    ctx.strokeStyle = '#3B82F6';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 5]);
+    
+    if (shape.type === 'circle') {
+      const centerX = shape.x + shape.width / 2;
+      const centerY = shape.y + shape.height / 2;
+      const radius = Math.min(shape.width, shape.height) / 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Fill with semi-transparent color
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fill();
+    } else if (shape.type === 'rectangle') {
+      ctx.strokeRect(shape.x, shape.y, shape.width, shape.height);
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+    } else if (shape.type === 'triangle') {
+      const centerX = shape.x + shape.width / 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, shape.y);
+      ctx.lineTo(shape.x, shape.y + shape.height);
+      ctx.lineTo(shape.x + shape.width, shape.y + shape.height);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+      ctx.fill();
+    }
+    
+    // Draw resize handle
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#3B82F6';
+    ctx.beginPath();
+    ctx.arc(shape.x + shape.width, shape.y + shape.height, 8, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+  };
+
   useEffect(() => {
-    if (framePreview && canvasRef.current) {
+    if ((framePreview || existingFrameUrl) && canvasRef.current) {
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
       const img = new Image();
-      img.src = framePreview;
+      if (framePreview) {
+        img.src = framePreview;
+      } else {
+        img.crossOrigin = 'anonymous';
+        // Check if URL is already absolute (Cloudinary) or relative
+        img.src = existingFrameUrl.startsWith('http') 
+          ? existingFrameUrl 
+          : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${existingFrameUrl}`;
+      }
       
+      // Helper function to draw wrapped text matching the main canvas logic
+      const drawWrappedText = (
+        context: CanvasRenderingContext2D,
+        text: string,
+        x: number,
+        y: number,
+        maxWidth: number,
+        lineHeight: number,
+        align: 'left' | 'center' | 'right' = 'left'
+      ) => {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+        const maxLines = 2;
+        let lineCount = 0;
+        const lines: string[] = [];
+
+        for (let i = 0; i < words.length; i++) {
+          const testLine = line + words[i] + ' ';
+          const metrics = context.measureText(testLine);
+          const testWidth = metrics.width;
+
+          if (testWidth > maxWidth && i > 0) {
+            lines.push(line.trim());
+            line = words[i] + ' ';
+            lineCount++;
+            if (lineCount >= maxLines) {
+              if (i < words.length) {
+                lines.push(line.trim() + '...');
+              }
+              break;
+            }
+          } else {
+            line = testLine;
+          }
+        }
+
+        if (line.trim()) {
+          lines.push(line.trim());
+        }
+
+        context.textAlign = align;
+        context.textBaseline = 'top';
+
+        lines.forEach((lineText, index) => {
+          let drawX = x;
+          if (align === 'center') {
+            drawX = x + maxWidth / 2;
+          } else if (align === 'right') {
+            drawX = x + maxWidth;
+          }
+          context.fillText(lineText, drawX, currentY + index * lineHeight);
+        });
+
+        // Reset alignment
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+      };
+
       img.onload = () => {
+        // Set canvas dimensions to match image
         canvas.width = img.width;
         canvas.height = img.height;
         
+        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw white background first
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw frame image
         ctx.drawImage(img, 0, 0);
 
+        // Draw text positions (only enabled ones)
         const enabledPositions = textPositions.filter(pos => pos.enabled !== false);
         enabledPositions.forEach((pos) => {
           const fontSize = pos.fontSize || 48;
           const color = pos.color || '#FFFFFF';
           ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px Arial`;
           ctx.fillStyle = color;
-          ctx.fillText(pos.label, pos.x, pos.y);
           
-          const metrics = ctx.measureText(pos.label);
-          ctx.strokeStyle = '#FF0000';
+          // Calculate text box dimensions
+          const boxWidth = pos.width || (canvas.width - pos.x - 40);
+          const boxHeight = fontSize * 2.5; // Approximate for 2 lines
+          const textAlign = pos.textAlign || 'left';
+
+          // Draw wrapped text matching public view
+          drawWrappedText(ctx, pos.label, pos.x, pos.y, boxWidth, fontSize, textAlign);
+          
+          // Draw text box background
+          ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
+          ctx.fillRect(pos.x, pos.y, boxWidth, boxHeight);
+          
+          // Draw text box border
+          ctx.strokeStyle = '#3B82F6';
           ctx.lineWidth = 2;
-          ctx.strokeRect(pos.x - 5, pos.y - fontSize, metrics.width + 10, fontSize + 10);
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(pos.x, pos.y, boxWidth, boxHeight);
+          ctx.setLineDash([]);
+          
+          // Draw resize handles (small squares on left and right)
+          const handleSize = 12;
+          ctx.fillStyle = '#3B82F6';
+          
+          // Left handle
+          ctx.fillRect(pos.x - handleSize/2, pos.y + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          
+          // Right handle
+          ctx.fillRect(pos.x + boxWidth - handleSize/2, pos.y + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          
+          // Draw width label
+          ctx.fillStyle = '#3B82F6';
+          ctx.font = '12px Arial';
+          ctx.fillText(`${Math.round(boxWidth)}px`, pos.x + boxWidth/2 - 20, pos.y - 5);
         });
+        
+        // Draw crop shape if exists
+        if (cropShape) {
+          drawCropShape(ctx, cropShape);
+        }
       };
       
       img.onerror = () => {
         console.error('Failed to load frame image');
       };
-    } else if (existingFrameUrl && !framePreview && canvasRef.current) {
-      // Load existing frame
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      // Check if URL is already absolute (Cloudinary) or relative
-      img.src = existingFrameUrl.startsWith('http') 
-        ? existingFrameUrl 
-        : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${existingFrameUrl}`;
-      
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0);
-
-        const enabledPositions = textPositions.filter(pos => pos.enabled !== false);
-        enabledPositions.forEach((pos) => {
-          const fontSize = pos.fontSize || 48;
-          const color = pos.color || '#FFFFFF';
-          ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px Arial`;
-          ctx.fillStyle = color;
-          ctx.fillText(pos.label, pos.x, pos.y);
-          
-          const metrics = ctx.measureText(pos.label);
-          ctx.strokeStyle = '#FF0000';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(pos.x - 5, pos.y - fontSize, metrics.width + 10, fontSize + 10);
-        });
-      };
     }
-  }, [framePreview, existingFrameUrl, textPositions]);
+  }, [framePreview, existingFrameUrl, textPositions, cropShape]);
 
   const handleFrameUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -193,43 +414,112 @@ export default function EditCampaignPage() {
     const x = (e.clientX - rect.left) * scaleX;
     const y = (e.clientY - rect.top) * scaleY;
 
+    // Check if clicked on resize handles first
     const enabledPositions = textPositions.filter(pos => pos.enabled !== false);
+    for (const pos of enabledPositions) {
+      const fontSize = pos.fontSize || 48;
+      const boxWidth = pos.width || (canvas.width - pos.x - 40);
+      const boxHeight = fontSize * 2.5;
+      const handleSize = 12;
+      const centerY = pos.y + (boxHeight / 2);
+      
+      // Check left handle
+      if (
+        x >= pos.x - handleSize &&
+        x <= pos.x + handleSize &&
+        y >= centerY - handleSize &&
+        y <= centerY + handleSize
+      ) {
+        setResizingField(pos.field);
+        setResizeHandle('left');
+        setResizeStart({ x: pos.x, width: boxWidth });
+        e.preventDefault();
+        return;
+      }
+      
+      // Check right handle
+      if (
+        x >= pos.x + boxWidth - handleSize &&
+        x <= pos.x + boxWidth + handleSize &&
+        y >= centerY - handleSize &&
+        y <= centerY + handleSize
+      ) {
+        setResizingField(pos.field);
+        setResizeHandle('right');
+        setResizeStart({ x: pos.x, width: boxWidth });
+        e.preventDefault();
+        return;
+      }
+    }
+
+    // Check if clicked near any enabled text position (for dragging)
     const clickedField = enabledPositions.find((pos) => {
       const fontSize = pos.fontSize || 48;
-      const metrics = ctx.measureText(pos.label);
-      const textWidth = metrics.width;
-      const textHeight = fontSize;
+      const boxWidth = pos.width || (canvas.width - pos.x - 40);
+      const boxHeight = fontSize * 2.5;
       
+      // Check if click is within text box (using top baseline)
       return (
-        x >= pos.x - 5 &&
-        x <= pos.x + textWidth + 5 &&
-        y >= pos.y - fontSize &&
-        y <= pos.y + 10
+        x >= pos.x &&
+        x <= pos.x + boxWidth &&
+        y >= pos.y &&
+        y <= pos.y + boxHeight
       );
     });
 
     if (clickedField) {
       setDraggingField(clickedField.field);
+      setDragOffset({ x: x - clickedField.x, y: y - clickedField.y });
       e.preventDefault();
     }
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!draggingField || !canvasRef.current) return;
+    if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
+    // Handle resizing
+    if (resizingField && resizeHandle) {
+      const dx = x - resizeStart.x;
+      
+      setTextPositions((prev) =>
+        prev.map((pos) => {
+          if (pos.field !== resizingField) return pos;
+          
+          const currentWidth = pos.width || (canvas.width - pos.x - 40);
+          
+          if (resizeHandle === 'left') {
+            // Moving left edge: adjust x and width
+            const newX = Math.max(0, resizeStart.x + dx);
+            const newWidth = resizeStart.width - (newX - resizeStart.x);
+            return { ...pos, x: newX, width: Math.max(50, newWidth) };
+          } else {
+            // Moving right edge: just adjust width
+            const newWidth = Math.max(50, resizeStart.width + dx);
+            return { ...pos, width: newWidth };
+          }
+        })
+      );
+      return;
+    }
+
+    // Handle dragging
+    if (!draggingField) return;
+
     setTextPositions((prev) =>
       prev.map((pos) =>
-        pos.field === draggingField ? { ...pos, x, y } : pos
+        pos.field === draggingField ? { ...pos, x: x - dragOffset.x, y: y - dragOffset.y } : pos
       )
     );
   };
 
   const handleCanvasMouseUp = () => {
     setDraggingField(null);
+    setResizingField(null);
+    setResizeHandle(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -257,16 +547,23 @@ export default function EditCampaignPage() {
         JSON.stringify(
           textPositions
             .filter(pos => pos.enabled !== false)
-            .map(({ field, x, y, fontSize, color, isBold }) => ({
+            .map(({ field, x, y, width, fontSize, color, isBold, textAlign }) => ({
               field,
               x,
               y,
+              width,
               fontSize,
               color,
               isBold,
+              textAlign,
             }))
         )
       );
+      if (cropShape) {
+        formData.append('cropShape', JSON.stringify(cropShape));
+      } else {
+        formData.append('cropShape', 'null');
+      }
 
       const token = document.cookie
         .split('; ')
@@ -443,6 +740,82 @@ export default function EditCampaignPage() {
             </div>
           </div>
 
+          {/* Photo Crop Shape - NEW FEATURE v2.0 */}
+          {(framePreview || existingFrameUrl) && (
+            <div className="bg-white rounded-lg shadow p-6 border-2 border-green-500">
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold">🎨 Photo Crop Shape</h2>
+                <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">NEW</span>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Select a shape to guide where users place their photos. This makes it easier for them to position correctly!
+              </p>
+              
+              {/* Shape Type Selector */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('none')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'none'
+                      ? 'border-gray-800 bg-gray-100'
+                      : 'border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  <X className="w-6 h-6" />
+                  <span className="text-xs font-medium">None</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('circle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'circle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Circle className="w-6 h-6" />
+                  <span className="text-xs font-medium">Circle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('rectangle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'rectangle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Square className="w-6 h-6" />
+                  <span className="text-xs font-medium">Rectangle</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleShapeTypeChange('triangle')}
+                  className={`p-3 border-2 rounded-lg flex flex-col items-center gap-2 transition-all ${
+                    selectedShapeType === 'triangle'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-400'
+                  }`}
+                >
+                  <Triangle className="w-6 h-6" />
+                  <span className="text-xs font-medium">Triangle</span>
+                </button>
+              </div>
+              
+              {cropShape && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800 font-medium">💡 Instructions:</p>
+                  <ul className="text-sm text-blue-700 mt-2 space-y-1">
+                    <li>• Drag the shape on canvas to reposition</li>
+                    <li>• Drag the blue circle (bottom-right) to resize</li>
+                    <li>• Users will see this shape when uploading photos</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Text Position Editor */}
           {(framePreview || existingFrameUrl) && (
             <div className="bg-white rounded-lg shadow p-6">
@@ -457,10 +830,29 @@ export default function EditCampaignPage() {
               <div className="overflow-x-auto">
                 <canvas
                   ref={canvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                  onMouseLeave={handleCanvasMouseUp}
+                  onMouseDown={(e) => {
+                    if (cropShape) {
+                      handleShapeMouseDown(e);
+                    }
+                    if (!draggingShape && !resizingShape) {
+                      handleCanvasMouseDown(e);
+                    }
+                  }}
+                  onMouseMove={(e) => {
+                    if (cropShape && (draggingShape || resizingShape)) {
+                      handleShapeMouseMove(e);
+                    } else if (!draggingShape && !resizingShape) {
+                      handleCanvasMouseMove(e);
+                    }
+                  }}
+                  onMouseUp={() => {
+                    handleShapeMouseUp();
+                    handleCanvasMouseUp();
+                  }}
+                  onMouseLeave={() => {
+                    handleShapeMouseUp();
+                    handleCanvasMouseUp();
+                  }}
                   className="border border-gray-300 rounded-lg cursor-move max-w-full bg-white"
                   style={{ minHeight: '400px', minWidth: '600px' }}
                 />

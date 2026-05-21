@@ -32,6 +32,8 @@ export default function CreateCampaignPage() {
     { field: 'location', label: 'Location', x: 100, y: 210, fontSize: 28, color: '#FFFFFF', isBold: false, enabled: true },
   ]);
   const [draggingField, setDraggingField] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [shapeDragOffset, setShapeDragOffset] = useState({ x: 0, y: 0 });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   
@@ -113,6 +115,7 @@ export default function CreateCampaignPage() {
         setResizingShape(true);
       } else {
         setDraggingShape(true);
+        setShapeDragOffset({ x: x - cropShape.x, y: y - cropShape.y });
       }
       e.preventDefault();
     }
@@ -131,8 +134,8 @@ export default function CreateCampaignPage() {
     if (draggingShape) {
       setCropShape(prev => prev ? {
         ...prev,
-        x: x - prev.width / 2,
-        y: y - prev.height / 2
+        x: x - shapeDragOffset.x,
+        y: y - shapeDragOffset.y
       } : null);
     } else if (resizingShape) {
       setCropShape(prev => prev ? {
@@ -200,6 +203,65 @@ export default function CreateCampaignPage() {
       const img = new Image();
       img.src = framePreview;
       
+      // Helper function to draw wrapped text matching the main canvas logic
+      const drawWrappedText = (
+        context: CanvasRenderingContext2D,
+        text: string,
+        x: number,
+        y: number,
+        maxWidth: number,
+        lineHeight: number,
+        align: 'left' | 'center' | 'right' = 'left'
+      ) => {
+        const words = text.split(' ');
+        let line = '';
+        let currentY = y;
+        const maxLines = 2;
+        let lineCount = 0;
+        const lines: string[] = [];
+
+        for (let i = 0; i < words.length; i++) {
+          const testLine = line + words[i] + ' ';
+          const metrics = context.measureText(testLine);
+          const testWidth = metrics.width;
+
+          if (testWidth > maxWidth && i > 0) {
+            lines.push(line.trim());
+            line = words[i] + ' ';
+            lineCount++;
+            if (lineCount >= maxLines) {
+              if (i < words.length) {
+                lines.push(line.trim() + '...');
+              }
+              break;
+            }
+          } else {
+            line = testLine;
+          }
+        }
+
+        if (line.trim()) {
+          lines.push(line.trim());
+        }
+
+        context.textAlign = align;
+        context.textBaseline = 'top';
+
+        lines.forEach((lineText, index) => {
+          let drawX = x;
+          if (align === 'center') {
+            drawX = x + maxWidth / 2;
+          } else if (align === 'right') {
+            drawX = x + maxWidth;
+          }
+          context.fillText(lineText, drawX, currentY + index * lineHeight);
+        });
+
+        // Reset alignment
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+      };
+
       img.onload = () => {
         // Set canvas dimensions to match image
         canvas.width = img.width;
@@ -222,21 +284,24 @@ export default function CreateCampaignPage() {
           const color = pos.color || '#FFFFFF';
           ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px Arial`;
           ctx.fillStyle = color;
-          ctx.fillText(pos.label, pos.x, pos.y);
           
           // Calculate text box dimensions
           const boxWidth = pos.width || (canvas.width - pos.x - 40);
           const boxHeight = fontSize * 2.5; // Approximate for 2 lines
+          const textAlign = pos.textAlign || 'left';
+
+          // Draw wrapped text matching public view
+          drawWrappedText(ctx, pos.label, pos.x, pos.y, boxWidth, fontSize, textAlign);
           
           // Draw text box background
           ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
-          ctx.fillRect(pos.x, pos.y - fontSize, boxWidth, boxHeight);
+          ctx.fillRect(pos.x, pos.y, boxWidth, boxHeight);
           
           // Draw text box border
           ctx.strokeStyle = '#3B82F6';
           ctx.lineWidth = 2;
           ctx.setLineDash([5, 5]);
-          ctx.strokeRect(pos.x, pos.y - fontSize, boxWidth, boxHeight);
+          ctx.strokeRect(pos.x, pos.y, boxWidth, boxHeight);
           ctx.setLineDash([]);
           
           // Draw resize handles (small squares on left and right)
@@ -244,15 +309,15 @@ export default function CreateCampaignPage() {
           ctx.fillStyle = '#3B82F6';
           
           // Left handle
-          ctx.fillRect(pos.x - handleSize/2, pos.y - fontSize + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          ctx.fillRect(pos.x - handleSize/2, pos.y + (boxHeight/2) - handleSize/2, handleSize, handleSize);
           
           // Right handle
-          ctx.fillRect(pos.x + boxWidth - handleSize/2, pos.y - fontSize + (boxHeight/2) - handleSize/2, handleSize, handleSize);
+          ctx.fillRect(pos.x + boxWidth - handleSize/2, pos.y + (boxHeight/2) - handleSize/2, handleSize, handleSize);
           
           // Draw width label
           ctx.fillStyle = '#3B82F6';
           ctx.font = '12px Arial';
-          ctx.fillText(`${Math.round(boxWidth)}px`, pos.x + boxWidth/2 - 20, pos.y - fontSize - 5);
+          ctx.fillText(`${Math.round(boxWidth)}px`, pos.x + boxWidth/2 - 20, pos.y - 5);
         });
         
         // Draw crop shape if exists
@@ -292,7 +357,7 @@ export default function CreateCampaignPage() {
       const boxWidth = pos.width || (canvas.width - pos.x - 40);
       const boxHeight = fontSize * 2.5;
       const handleSize = 12;
-      const centerY = pos.y - fontSize + (boxHeight / 2);
+      const centerY = pos.y + (boxHeight / 2);
       
       // Check left handle
       if (
@@ -329,17 +394,18 @@ export default function CreateCampaignPage() {
       const boxWidth = pos.width || (canvas.width - pos.x - 40);
       const boxHeight = fontSize * 2.5;
       
-      // Check if click is within text box
+      // Check if click is within text box (using top baseline)
       return (
         x >= pos.x &&
         x <= pos.x + boxWidth &&
-        y >= pos.y - fontSize &&
-        y <= pos.y + 10
+        y >= pos.y &&
+        y <= pos.y + boxHeight
       );
     });
 
     if (clickedField) {
       setDraggingField(clickedField.field);
+      setDragOffset({ x: x - clickedField.x, y: y - clickedField.y });
       e.preventDefault();
     }
   };
@@ -381,7 +447,7 @@ export default function CreateCampaignPage() {
 
     setTextPositions((prev) =>
       prev.map((pos) =>
-        pos.field === draggingField ? { ...pos, x, y } : pos
+        pos.field === draggingField ? { ...pos, x: x - dragOffset.x, y: y - dragOffset.y } : pos
       )
     );
   };
