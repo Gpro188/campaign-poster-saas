@@ -6,6 +6,7 @@ import { campaignAPI } from '@/lib/api';
 import { Campaign } from '@/types';
 import { Image, ArrowRight, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
+import { encodeShortId } from '@/lib/urlShortener';
 
 export default function Home() {
   const router = useRouter();
@@ -136,7 +137,8 @@ export default function Home() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          const campaignUrl = `${window.location.origin}/campaigns/${campaign._id}`;
+                          const shortId = encodeShortId(campaign._id);
+                          const campaignUrl = `${window.location.origin}/c/${shortId}`;
                           const message = encodeURIComponent(
                             `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your campaign poster now! 👇\n${campaignUrl}`
                           );

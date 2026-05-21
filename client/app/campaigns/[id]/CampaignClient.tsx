@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { campaignAPI, posterAPI } from '@/lib/api';
 import { Campaign, TextPosition, CropShape } from '@/types';
 import { Upload, Download, Share2, Image as ImageIcon, Loader, Circle, Square, Triangle } from 'lucide-react';
+import { encodeShortId } from '@/lib/urlShortener';
 
 interface CampaignClientProps {
   initialCampaign?: Campaign | null;
@@ -1238,7 +1239,8 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                 onClick={async () => {
                   if (!generatedPosterBlob || !campaign) return;
                   
-                  const campaignUrl = window.location.href;
+                  const shortId = encodeShortId(campaign._id);
+                  const campaignUrl = `${window.location.origin}/c/${shortId}`;
                   const file = new File([generatedPosterBlob], 'campaign-poster.png', { type: 'image/png' });
                   
                   // Try Web Share API first (best for mobile)
