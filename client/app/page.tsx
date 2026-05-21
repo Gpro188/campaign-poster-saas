@@ -128,6 +128,9 @@ export default function Home() {
           <nav className="hidden md:flex items-center gap-8">
             <Link href="#campaigns" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Home</Link>
             <a href="#features" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Features</a>
+            <Link href="/dashboard" className="text-sm font-bold text-white bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg transition-colors shadow-sm shadow-emerald-500/20">
+              Admin Login
+            </Link>
           </nav>
 
           {/* Simple Mobile Menu Trigger */}
