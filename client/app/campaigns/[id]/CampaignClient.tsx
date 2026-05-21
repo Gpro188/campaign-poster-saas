@@ -1009,29 +1009,8 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-0">
-              {/* Left Column: Interactive Poster Frame Preview */}
-              <div className="md:col-span-5 bg-gray-50/50 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4 block">Poster Design Template</span>
-                <div className="relative w-full max-w-[280px] aspect-square rounded-xl shadow-md overflow-hidden bg-white border border-gray-200">
-                  {composedPreviewUrl ? (
-                    <img 
-                      src={composedPreviewUrl} 
-                      alt="Campaign Frame Preview" 
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4">
-                      <Loader className="w-8 h-8 animate-spin mb-2 text-emerald-500" />
-                      <span className="text-xs">Loading poster framework...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Upload Controls & Info */}
-              <div className="md:col-span-7 p-8 flex flex-col justify-center">
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 max-w-xl mx-auto">
+            <div className="p-8 flex flex-col justify-center text-center">
                 <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-2">Create Your Custom Poster</h2>
                 <p className="text-gray-500 mb-6 text-sm leading-relaxed">
                   Support the campaign in just 3 simple steps. Click below to upload your photo, crop it to fit, and add your name.
@@ -1127,32 +1106,11 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
 
         {/* Step 3: Details */}
         {step === 'details' && !posterGenerated && (
-          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-0">
-              {/* Left Column: Live Composed Poster Preview */}
-              <div className="md:col-span-5 bg-gray-50/50 p-6 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-gray-100">
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4 block">Live Poster Preview</span>
-                <div className="relative w-full max-w-[280px] aspect-square rounded-xl shadow-md overflow-hidden bg-white border border-gray-200">
-                  {composedPreviewUrl ? (
-                    <img 
-                      src={composedPreviewUrl} 
-                      alt="Your Campaign Poster Preview" 
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-4">
-                      <Loader className="w-8 h-8 animate-spin mb-2 text-emerald-500" />
-                      <span className="text-xs">Generating preview...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Information Input Form */}
-              <div className="md:col-span-7 p-8 flex flex-col justify-center">
+          <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 max-w-xl mx-auto">
+            <div className="p-8 flex flex-col justify-center text-center">
                 <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-2">Customize Details</h2>
                 <p className="text-gray-500 mb-6 text-sm leading-relaxed">
-                  Fill out the fields below. The poster preview on the left will update in real time as you type!
+                  Fill out the fields below to add your details to the campaign poster.
                 </p>
 
                 <div className="space-y-4">
@@ -1171,7 +1129,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                       const required = isName; // Only name is required
                       
                       return (
-                        <div key={pos.field}>
+                        <div key={pos.field} className="text-left">
                           <label className="block text-sm font-semibold text-gray-700 mb-1">
                             {label} {required && <span className="text-red-500">*</span>}
                           </label>

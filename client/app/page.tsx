@@ -128,7 +128,6 @@ export default function Home() {
           <nav className="hidden md:flex items-center gap-8">
             <Link href="#campaigns" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Home</Link>
             <a href="#features" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Features</a>
-            <Link href="/dashboard" className="text-sm font-semibold text-gray-300 hover:text-emerald-400 transition-colors">Login</Link>
           </nav>
 
           {/* Simple Mobile Menu Trigger */}
