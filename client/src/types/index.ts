@@ -28,7 +28,7 @@ export interface Campaign {
   frameImageUrl: string;
   textPositions: TextPosition[];
   cropShape?: CropShape;
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   ownerId: string;
   posterCount: number;
   contactNumber?: string;
