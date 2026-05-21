@@ -1083,7 +1083,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-emerald-100/60 shadow-sm">
                     <span className="text-[10px] sm:text-xs text-emerald-900/60 font-bold uppercase tracking-wider block mb-1">
-                      Posters Created
+                      Visitors
                     </span>
                     <span className="text-2xl font-extrabold text-emerald-950">
                       {campaign.posterCount || 0}

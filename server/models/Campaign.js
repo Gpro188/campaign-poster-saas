@@ -92,6 +92,10 @@ const campaignSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  visitCount: {
+    type: Number,
+    default: 0
+  },
   startDate: {
     type: Date,
     required: true,
@@ -122,7 +126,7 @@ campaignSchema.virtual('isCurrentlyActive').get(function() {
   return this.status === 'active' && 
          this.isSubscriptionActive !== false &&
          now >= this.startDate && 
-         now <= this.endDate;
+         (!this.endDate || now <= this.endDate);
 });
 
 module.exports = mongoose.model('Campaign', campaignSchema);

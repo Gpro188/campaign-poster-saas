@@ -66,13 +66,16 @@ const getAllCampaigns = async (req, res) => {
       status: 'active',
       isSubscriptionActive: { $ne: false },
       startDate: { $lte: now },
-      endDate: { $gte: now }
+      $or: [
+        { endDate: { $exists: false } },
+        { endDate: null },
+        { endDate: { $gte: now } }
+      ]
     }).sort({ createdAt: -1 });
     
-    const campaignsWithCount = await Promise.all(campaigns.map(async (c) => {
-      const count = await Poster.countDocuments({ campaignId: c._id });
-      return { ...c.toObject(), posterCount: count };
-    }));
+    const campaignsWithCount = campaigns.map((c) => {
+      return { ...c.toObject(), posterCount: c.visitCount || 0 };
+    });
     
     res.json({ campaigns: campaignsWithCount });
   } catch (error) {
@@ -85,14 +88,19 @@ const getAllCampaigns = async (req, res) => {
 const getCampaignById = async (req, res) => {
   try {
     const { id } = req.params;
-    const campaign = await Campaign.findById(id);
+    
+    // Atomically increment the visitCount for the campaign
+    const campaign = await Campaign.findByIdAndUpdate(
+      id,
+      { $inc: { visitCount: 1 } },
+      { new: true }
+    );
     
     if (!campaign) {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
-    const count = await Poster.countDocuments({ campaignId: id });
-    const campaignObj = { ...campaign.toObject(), posterCount: count };
+    const campaignObj = { ...campaign.toObject(), posterCount: campaign.visitCount || 0 };
 
     res.json({ campaign: campaignObj });
   } catch (error) {
@@ -108,14 +116,13 @@ const getAllAdminCampaigns = async (req, res) => {
     const campaigns = await Campaign.find().sort({ createdAt: -1 });
     
     // Add computed field for active status and dynamic poster count
-    const campaignsWithStatus = await Promise.all(campaigns.map(async (c) => {
+    const campaignsWithStatus = campaigns.map((c) => {
       const isActive = c.status === 'active' && 
                       c.isSubscriptionActive !== false &&
                       now >= c.startDate && 
-                      now <= c.endDate;
-      const count = await Poster.countDocuments({ campaignId: c._id });
-      return { ...c.toObject(), isCurrentlyActive: isActive, posterCount: count };
-    }));
+                      (!c.endDate || now <= c.endDate);
+      return { ...c.toObject(), isCurrentlyActive: isActive, posterCount: c.visitCount || 0 };
+    });
     
     res.json({ campaigns: campaignsWithStatus });
   } catch (error) {
@@ -165,8 +172,7 @@ const updateCampaign = async (req, res) => {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
-    const count = await Poster.countDocuments({ campaignId: id });
-    const campaignObj = { ...campaign.toObject(), posterCount: count };
+    const campaignObj = { ...campaign.toObject(), posterCount: campaign.visitCount || 0 };
 
     res.json({
       message: 'Campaign updated successfully',
@@ -205,16 +211,16 @@ const getCampaignStats = async (req, res) => {
       return res.status(404).json({ message: 'Campaign not found' });
     }
 
-    const totalPosters = await Poster.countDocuments({ campaignId: id });
+    const totalVisits = campaign.visitCount || 0;
     const recentPosters = await Poster.find({ campaignId: id })
       .sort({ createdAt: -1 })
       .limit(10);
 
-    const campaignObj = { ...campaign.toObject(), posterCount: totalPosters };
+    const campaignObj = { ...campaign.toObject(), posterCount: totalVisits };
 
     res.json({
       campaign: campaignObj,
-      totalPosters,
+      totalPosters: totalVisits,
       recentPosters
     });
   } catch (error) {

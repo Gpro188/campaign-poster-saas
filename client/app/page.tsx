@@ -323,7 +323,7 @@ export default function Home() {
                       <div className="flex items-center justify-between text-sm text-gray-500 border-t border-gray-150 pt-4">
                         <div className="flex flex-col">
                           <span className="font-extrabold text-gray-800 text-base">{campaign.posterCount || 0}</span>
-                          <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">posters created</span>
+                          <span className="text-xs text-gray-400 uppercase tracking-wider font-semibold">visitors</span>
                         </div>
                         
                         <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#0A2540] group-hover:bg-[#00C853] text-white shadow-sm transition-colors duration-300">
