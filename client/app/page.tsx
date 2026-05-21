@@ -85,7 +85,7 @@ export default function Home() {
     : sampleTemplates as unknown as Campaign[];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-white flex flex-col font-sans">
       
       {/* Dynamic Keyframes Animation Injection */}
       <style jsx global>{`

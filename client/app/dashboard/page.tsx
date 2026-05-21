@@ -177,20 +177,20 @@ export default function DashboardPage() {
                       <div className="flex flex-col gap-1">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            campaign.status === 'pending'
+                            (campaign as any).status === 'pending'
                               ? 'bg-yellow-100 text-yellow-800'
                               : (campaign as any).isCurrentlyActive
                               ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {campaign.status === 'pending'
+                          {(campaign as any).status === 'pending'
                             ? '⏳ Pending'
                             : (campaign as any).isCurrentlyActive 
                             ? '✅ Active' 
                             : '❌ Expired'}
                         </span>
-                        {! (campaign as any).isCurrentlyActive && campaign.status === 'active' && (
+                        {! (campaign as any).isCurrentlyActive && (campaign as any).status === 'active' && (
                           <span className="text-xs text-gray-500">
                             Subscription ended
                           </span>
