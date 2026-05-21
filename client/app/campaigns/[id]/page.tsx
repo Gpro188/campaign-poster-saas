@@ -40,6 +40,71 @@ export default function CampaignPage() {
   const animationFrameRef = useRef<number | null>(null);
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Image Caching for high-performance instant rendering
+  const [frameLoaded, setFrameLoaded] = useState(false);
+  const [frameLoadingError, setFrameLoadingError] = useState(false);
+  const frameImageRef = useRef<HTMLImageElement | null>(null);
+  
+  const [photoLoaded, setPhotoLoaded] = useState(false);
+  const photoImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Pre-load frame image once when campaign details are loaded
+  useEffect(() => {
+    if (!campaign) return;
+    setFrameLoaded(false);
+    setFrameLoadingError(false);
+    
+    const frameImg = new Image();
+    frameImg.crossOrigin = 'anonymous';
+    
+    const frameUrl = campaign.frameImageUrl.startsWith('http') 
+      ? campaign.frameImageUrl 
+      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
+    
+    console.log('Pre-loading frame from URL:', frameUrl);
+    
+    frameImg.onload = () => {
+      console.log('✅ Frame loaded successfully and cached!', { 
+        width: frameImg.width, 
+        height: frameImg.height 
+      });
+      frameImageRef.current = frameImg;
+      setFrameLoaded(true);
+    };
+    
+    frameImg.onerror = (err) => {
+      console.error('❌ Failed to pre-load frame image:', err);
+      setFrameLoadingError(true);
+    };
+    
+    frameImg.src = frameUrl;
+  }, [campaign]);
+
+  // Pre-load user photo when photoPreview changes
+  useEffect(() => {
+    if (!photoPreview) {
+      photoImageRef.current = null;
+      setPhotoLoaded(false);
+      return;
+    }
+    setPhotoLoaded(false);
+    
+    const photoImg = new Image();
+    photoImg.crossOrigin = 'anonymous';
+    
+    photoImg.onload = () => {
+      console.log('✅ User photo loaded and cached!');
+      photoImageRef.current = photoImg;
+      setPhotoLoaded(true);
+    };
+    
+    photoImg.onerror = (err) => {
+      console.error('❌ Failed to load user photo:', err);
+    };
+    
+    photoImg.src = photoPreview;
+  }, [photoPreview]);
+
   useEffect(() => {
     const loadCampaign = async () => {
       try {
@@ -57,16 +122,16 @@ export default function CampaignPage() {
     }
   }, [params.id]);
 
-  // Draw canvas when photo is uploaded or campaign loads
+  // Draw canvas instantly using cached images
   useEffect(() => {
     console.log('=== CANVAS USE EFFECT TRIGGERED ===');
     console.log('Campaign:', campaign ? 'YES' : 'NO');
     console.log('Canvas ref:', canvasRef.current ? 'EXISTS' : 'NULL');
-    console.log('Photo preview:', photoPreview ? 'EXISTS' : 'NULL');
-    console.log('Name:', name, 'Designation:', designation, 'Location:', location);
+    console.log('Frame Loaded:', frameLoaded ? 'YES' : 'NO');
+    console.log('Photo Loaded:', photoLoaded ? 'YES' : 'NO');
     
-    if (!campaign || !canvasRef.current) {
-      console.log('Exiting: No campaign or canvas');
+    if (!campaign || !canvasRef.current || !frameLoaded || !frameImageRef.current) {
+      console.log('Exiting: Campaign, canvas, or frame image is not ready yet');
       return;
     }
 
@@ -77,128 +142,53 @@ export default function CampaignPage() {
       return;
     }
 
-    // Load frame image from backend
-    const frameImg = new Image();
-    frameImg.crossOrigin = 'anonymous';
-    
-    // Check if frameImageUrl is already a full URL (Cloudinary) or relative path
-    const frameUrl = campaign.frameImageUrl.startsWith('http') 
-      ? campaign.frameImageUrl 
-      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
-    
-    console.log('Loading frame from URL:', frameUrl);
-    console.log('Campaign frameImageUrl:', campaign.frameImageUrl);
-    console.log('Is Cloudinary URL:', campaign.frameImageUrl.startsWith('http'));
-    
-    // Test if URL is accessible
-    fetch(frameUrl, { method: 'HEAD' })
-      .then(response => {
-        console.log('Frame URL HEAD request status:', response.status, response.ok);
-        if (!response.ok) {
-          console.error('Frame URL is not accessible! Status:', response.status);
-        }
-      })
-      .catch(err => {
-        console.error('Frame URL HEAD request failed:', err);
-        console.log('This might be a CORS issue or the file does not exist');
-      });
-    
-    frameImg.onload = () => {
-      console.log('✅ Frame loaded successfully!', { 
-        width: frameImg.width, 
-        height: frameImg.height 
-      });
-      
-      canvas.width = frameImg.width;
-      canvas.height = frameImg.height;
+    const frameImg = frameImageRef.current;
+    canvas.width = frameImg.width;
+    canvas.height = frameImg.height;
 
-      if (photoPreview) {
-        console.log('Drawing with photo...');
-        const photoImg = new Image();
-        photoImg.crossOrigin = 'anonymous';
-        photoImg.src = photoPreview;
-        
-        photoImg.onload = () => {
-          console.log('✅ Photo loaded, starting to draw...');
-          
-          // Clear canvas
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw white background
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          console.log('Drew white background');
-          
-          // Draw user photo
-          const scaledWidth = photoImg.width * photoScale;
-          const scaledHeight = photoImg.height * photoScale;
-          
-          console.log('Drawing photo with scale:', photoScale, 'dimensions:', { x: photoPosition.x, y: photoPosition.y, w: scaledWidth, h: scaledHeight });
-          
-          ctx.drawImage(
-            photoImg,
-            photoPosition.x,
-            photoPosition.y,
-            scaledWidth,
-            scaledHeight
-          );
-          console.log('Drew photo');
-          
-          // Draw frame overlay
-          ctx.drawImage(frameImg, 0, 0);
-          console.log('Drew frame overlay');
-          
-          // Draw text - ALWAYS draw text if it exists
-          console.log('Drawing text with values:', { name, designation, location });
-          drawText(ctx, canvas, campaign.textPositions);
-          console.log('Drew text');
-          
-          // Draw crop shape guide if campaign has one
-          if ((campaign as any).cropShape) {
-            console.log('Drawing crop shape guide:', (campaign as any).cropShape);
-            drawCropShapeGuide(ctx, (campaign as any).cropShape);
-          }
-          
-          console.log('🎨 Canvas drawing COMPLETE!');
-          setCanvasReady(true);
-        };
-        
-        photoImg.onerror = (err) => {
-          console.error('❌ Failed to load photo image:', err);
-          console.error('Photo source:', photoPreview.substring(0, 100) + '...');
-        };
-      } else {
-        console.log('No photo uploaded yet, showing frame only...');
-        // Just show frame
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(frameImg, 0, 0);
-        
-        // Still draw text even without photo
-        console.log('Drawing text (frame only mode):', { name, designation, location });
-        drawText(ctx, canvas, campaign.textPositions);
-        
-        setCanvasReady(true);
-        console.log('Frame displayed, waiting for photo upload...');
-      }
-    };
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    frameImg.onerror = (err) => {
-      console.error('❌ Failed to load frame image from:', frameUrl);
-      console.error('Error event:', err);
-      console.log('Trying to test image loading...');
+    // Draw white background
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (photoPreview && photoLoaded && photoImageRef.current) {
+      const photoImg = photoImageRef.current;
       
-      // Try to create another image to test
-      const testImg = new Image();
-      testImg.onload = () => console.log('Test image loaded OK');
-      testImg.onerror = () => console.error('Test image also failed');
-      testImg.src = frameUrl + '?t=' + Date.now();
-    };
-    
-    // Force load in case of caching issues
-    frameImg.src = frameUrl + '?t=' + Date.now();
-  }, [campaign, photoPreview, photoScale, photoPosition, name, designation, location]);
+      // Draw user photo
+      const scaledWidth = photoImg.width * photoScale;
+      const scaledHeight = photoImg.height * photoScale;
+      
+      ctx.drawImage(
+        photoImg,
+        photoPosition.x,
+        photoPosition.y,
+        scaledWidth,
+        scaledHeight
+      );
+      
+      // Draw frame overlay
+      ctx.drawImage(frameImg, 0, 0);
+      
+      // Draw text
+      drawText(ctx, canvas, campaign.textPositions);
+      
+      // Draw crop shape guide if campaign has one
+      if ((campaign as any).cropShape) {
+        drawCropShapeGuide(ctx, (campaign as any).cropShape);
+      }
+      
+      setCanvasReady(true);
+      console.log('🎨 Canvas drawing with photo COMPLETE!');
+    } else {
+      // Just show frame overlay and text
+      ctx.drawImage(frameImg, 0, 0);
+      drawText(ctx, canvas, campaign.textPositions);
+      setCanvasReady(true);
+      console.log('🎨 Canvas drawing frame-only COMPLETE!');
+    }
+  }, [campaign, frameLoaded, photoPreview, photoLoaded, photoScale, photoPosition, name, designation, location]);
 
   // Draw text with wrapping to fit within maxWidth
   const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, align: 'left' | 'center' | 'right' = 'left') => {
@@ -711,21 +701,24 @@ export default function CampaignPage() {
 
     console.log('Generating final poster...');
     
-    // Load frame image - check if it's a Cloudinary URL or relative path
-    const frameUrl = campaign.frameImageUrl.startsWith('http') 
-      ? campaign.frameImageUrl 
-      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
-    
-    console.log('Generating poster with frame URL:', frameUrl);
-    
-    const frameImg = new Image();
-    frameImg.crossOrigin = 'anonymous';
-    
-    await new Promise((resolve, reject) => {
-      frameImg.onload = resolve;
-      frameImg.onerror = reject;
-      frameImg.src = frameUrl;
-    });
+    // Use cached frame image if available, otherwise load it
+    const frameImg = frameImageRef.current || new Image();
+    if (!frameImageRef.current) {
+      const frameUrl = campaign.frameImageUrl.startsWith('http') 
+        ? campaign.frameImageUrl 
+        : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${campaign.frameImageUrl}`;
+      
+      console.log('Generating poster - loading frame from URL:', frameUrl);
+      frameImg.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        frameImg.onload = resolve;
+        frameImg.onerror = reject;
+        frameImg.src = frameUrl;
+      });
+    } else {
+      console.log('Generating poster - using cached frame image');
+    }
 
     // Set canvas to frame dimensions
     canvas.width = frameImg.width;
@@ -738,14 +731,29 @@ export default function CampaignPage() {
     // Draw cropped photo (or original if no crop)
     const photoToUse = croppedPhoto || photoPreview;
     if (photoToUse) {
-      const photoImg = new Image();
-      photoImg.crossOrigin = 'anonymous';
+      let photoImg = new Image();
       
-      await new Promise((resolve, reject) => {
-        photoImg.onload = resolve;
-        photoImg.onerror = reject;
-        photoImg.src = photoToUse;
-      });
+      if (croppedPhoto) {
+        // Cropped photo is a local data URL, load it quickly
+        photoImg.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          photoImg.onload = resolve;
+          photoImg.onerror = reject;
+          photoImg.src = croppedPhoto;
+        });
+      } else if (photoImageRef.current) {
+        // Use cached full user photo
+        photoImg = photoImageRef.current;
+        console.log('Generating poster - using cached user photo');
+      } else {
+        // Fallback load
+        photoImg.crossOrigin = 'anonymous';
+        await new Promise((resolve, reject) => {
+          photoImg.onload = resolve;
+          photoImg.onerror = reject;
+          photoImg.src = photoToUse;
+        });
+      }
 
       const cropShape = (campaign as any).cropShape;
       
@@ -859,8 +867,34 @@ export default function CampaignPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-100 flex flex-col items-center">
+          <div className="relative w-20 h-20 mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-blue-50 animate-pulse"></div>
+            <div className="absolute inset-0 rounded-full border-t-4 border-blue-600 animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center animate-bounce">
+              <span className="text-xl">🚀</span>
+            </div>
+          </div>
+          
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Connecting to Campaign Server</h2>
+          <p className="text-gray-600 mb-6 leading-relaxed">
+            Please wait a moment while we retrieve the campaign details...
+          </p>
+          
+          {/* Friendly wake-up tier notice */}
+          <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 text-left">
+            <div className="flex gap-3">
+              <span className="text-xl">💡</span>
+              <div>
+                <p className="text-sm font-semibold text-blue-900 mb-0.5">First visit wake-up</p>
+                <p className="text-xs text-blue-700 leading-normal">
+                  Our backend uses a free hosting tier that falls asleep after inactivity. Waking it up might take 30 to 50 seconds. Thank you for your patience!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
