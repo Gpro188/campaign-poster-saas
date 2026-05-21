@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { campaignAPI, posterAPI } from '@/lib/api';
 import { Campaign, TextPosition, CropShape } from '@/types';
-import { Upload, Download, Share2, Image as ImageIcon, Loader, Circle, Square, Triangle, Copy, Check } from 'lucide-react';
+import { Upload, Download, Share2, Image as ImageIcon, Loader, Circle, Square, Triangle, Copy, Check, ZoomIn, ZoomOut, RotateCw, RotateCcw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, RefreshCw } from 'lucide-react';
 import { encodeShortId } from '@/lib/urlShortener';
 import CampaignFramePreview from '@/components/CampaignFramePreview';
 
@@ -32,6 +32,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
   // Photo adjustments
   const [photoScale, setPhotoScale] = useState(1);
   const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
+  const [photoRotation, setPhotoRotation] = useState(0); // in degrees: 0, 90, 180, 270
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
@@ -458,7 +459,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
 
   // Handle crop confirmation
   const handleCropConfirm = () => {
-    if (!cropCanvasRef.current || !photoPreview || !campaign) return;
+    if (!photoPreview || !campaign) return;
     
     const cropShape = (campaign as any).cropShape;
     if (!cropShape) {
@@ -468,18 +469,18 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
       return;
     }
 
-    // Create cropped image
-    const canvas = cropCanvasRef.current;
+    // Create cropped image using an in-memory canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = cropShape.width;
+    canvas.height = cropShape.height;
+    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const img = new Image();
     img.onload = () => {
-      // Set canvas to crop shape dimensions
-      canvas.width = cropShape.width;
-      canvas.height = cropShape.height;
-
       // Apply crop shape clipping
+      ctx.save();
       if (cropShape.type === 'circle') {
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -496,7 +497,6 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
         ctx.closePath();
         ctx.clip();
       }
-      // Rectangle doesn't need special clipping
 
       // Calculate scale and position to fit photo in crop area
       const scaleX = cropShape.width / img.width;
@@ -505,11 +505,15 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
       
       const scaledWidth = img.width * scale;
       const scaledHeight = img.height * scale;
+      
       const x = (cropShape.width - scaledWidth) / 2 + photoPosition.x;
       const y = (cropShape.height - scaledHeight) / 2 + photoPosition.y;
 
-      // Draw cropped image
-      ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+      // Draw cropped image with rotation
+      ctx.translate(x + scaledWidth / 2, y + scaledHeight / 2);
+      ctx.rotate((photoRotation * Math.PI) / 180);
+      ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+      ctx.restore();
 
       // Save cropped photo
       const croppedDataUrl = canvas.toDataURL('image/png');
@@ -539,78 +543,96 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
         return;
       }
 
-      // Set canvas to crop shape size
-      canvas.width = cropShape.width;
-      canvas.height = cropShape.height;
+      const PADDING = 60;
+      // Set canvas to crop shape size plus padding
+      canvas.width = cropShape.width + PADDING * 2;
+      canvas.height = cropShape.height + PADDING * 2;
 
-      // Draw photo with current position and scale
+      // Draw photo with current position, scale and rotation
       const img = new Image();
       img.onload = () => {
         // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // Draw shape outline guide
+        // 1. Draw photo (unclipped, so visitor sees what's being cropped out)
         ctx.save();
-        ctx.strokeStyle = '#3B82F6';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]);
-        if (cropShape.type === 'circle') {
-          const centerX = canvas.width / 2;
-          const centerY = canvas.height / 2;
-          const radius = Math.min(canvas.width, canvas.height) / 2;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-          ctx.stroke();
-        } else if (cropShape.type === 'triangle') {
-          const centerX = canvas.width / 2;
-          ctx.beginPath();
-          ctx.moveTo(centerX, 0);
-          ctx.lineTo(0, canvas.height);
-          ctx.lineTo(canvas.width, canvas.height);
-          ctx.closePath();
-          ctx.stroke();
-        } else {
-          ctx.strokeRect(0, 0, canvas.width, canvas.height);
-        }
-        ctx.restore();
-
-        // Apply clipping for shape
-        if (cropShape.type === 'circle') {
-          const centerX = canvas.width / 2;
-          const centerY = canvas.height / 2;
-          const radius = Math.min(canvas.width, canvas.height) / 2;
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-          ctx.clip();
-        } else if (cropShape.type === 'triangle') {
-          const centerX = canvas.width / 2;
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(centerX, 0);
-          ctx.lineTo(0, canvas.height);
-          ctx.lineTo(canvas.width, canvas.height);
-          ctx.closePath();
-          ctx.clip();
-        }
-
-        // Calculate photo position and scale
+        
         const scaleX = cropShape.width / img.width;
         const scaleY = cropShape.height / img.height;
         const scale = Math.max(scaleX, scaleY) * photoScale;
         
         const scaledWidth = img.width * scale;
         const scaledHeight = img.height * scale;
-        const x = (cropShape.width - scaledWidth) / 2 + photoPosition.x;
-        const y = (cropShape.height - scaledHeight) / 2 + photoPosition.y;
+        
+        const cropCenterX = PADDING + cropShape.width / 2;
+        const cropCenterY = PADDING + cropShape.height / 2;
+        
+        const drawX = cropCenterX - scaledWidth / 2 + photoPosition.x;
+        const drawY = cropCenterY - scaledHeight / 2 + photoPosition.y;
+        
+        // Move to photo center, rotate, and draw centered
+        ctx.translate(drawX + scaledWidth / 2, drawY + scaledHeight / 2);
+        ctx.rotate((photoRotation * Math.PI) / 180);
+        ctx.drawImage(img, -scaledWidth / 2, -scaledHeight / 2, scaledWidth, scaledHeight);
+        ctx.restore();
 
-        // Draw photo
-        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
+        // 2. Draw semi-transparent dark overlay over the cropped-out areas
+        ctx.save();
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.65)'; // Sleek slate-900 transparent overlay
+        
+        ctx.beginPath();
+        // Outer rectangle (covers entire canvas)
+        ctx.rect(0, 0, canvas.width, canvas.height);
+        
+        // Inner crop shape drawn counter-clockwise to exclude it from the overlay fill (evenodd rule)
+        if (cropShape.type === 'circle') {
+          const centerX = PADDING + cropShape.width / 2;
+          const centerY = PADDING + cropShape.height / 2;
+          const radius = Math.min(cropShape.width, cropShape.height) / 2;
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
+        } else if (cropShape.type === 'triangle') {
+          const centerX = PADDING + cropShape.width / 2;
+          ctx.moveTo(centerX, PADDING);
+          ctx.lineTo(PADDING, PADDING + cropShape.height);
+          ctx.lineTo(PADDING + cropShape.width, PADDING + cropShape.height);
+          ctx.closePath();
+        } else {
+          // Rectangle counter-clockwise
+          ctx.rect(PADDING + cropShape.width, PADDING, -cropShape.width, cropShape.height);
+        }
+        
+        ctx.fill('evenodd');
+        ctx.restore();
+
+        // 3. Draw shape outline guide
+        ctx.save();
+        ctx.strokeStyle = '#10B981'; // Emerald color matching theme
+        ctx.lineWidth = 3;
+        ctx.setLineDash([8, 4]);
+        
+        if (cropShape.type === 'circle') {
+          const centerX = PADDING + cropShape.width / 2;
+          const centerY = PADDING + cropShape.height / 2;
+          const radius = Math.min(cropShape.width, cropShape.height) / 2;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (cropShape.type === 'triangle') {
+          const centerX = PADDING + cropShape.width / 2;
+          ctx.beginPath();
+          ctx.moveTo(centerX, PADDING);
+          ctx.lineTo(PADDING, PADDING + cropShape.height);
+          ctx.lineTo(PADDING + cropShape.width, PADDING + cropShape.height);
+          ctx.closePath();
+          ctx.stroke();
+        } else {
+          ctx.strokeRect(PADDING, PADDING, cropShape.width, cropShape.height);
+        }
         ctx.restore();
       };
       img.src = photoPreview;
     }
-  }, [step, photoPreview, photoScale, photoPosition, campaign]);
+  }, [step, photoPreview, photoScale, photoPosition, photoRotation, campaign]);
 
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!photoPreview || !cropCanvasRef.current) return;
@@ -1191,7 +1213,7 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
           <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 sm:p-8 max-w-xl mx-auto">
             <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Adjust Your Photo</h2>
             <p className="text-center text-gray-500 mb-6 text-sm">
-              Drag your photo or use the slider below to position it perfectly inside the crop area.
+              Drag your photo or use the controls below to position, zoom, and rotate it perfectly.
             </p>
             
             {/* Crop Canvas */}
@@ -1216,21 +1238,152 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
               />
             </div>
 
-            {/* Scale Control */}
-            <div className="mb-8">
-              <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2">
-                <span>Scale Adjust</span>
-                <span>{Math.round(photoScale * 100)}%</span>
+            {/* Control Panel Groups */}
+            <div className="space-y-6 mb-8">
+              {/* Zoom & Slider Control */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                    🔍 Zoom Scale
+                  </span>
+                  <span className="text-xs font-bold text-slate-700 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-sm">
+                    {Math.round(photoScale * 100)}%
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoScale(prev => Math.max(0.1, Number((prev - 0.1).toFixed(2))))}
+                    className="p-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-slate-600 transition-colors flex items-center justify-center"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="range"
+                    min="0.1"
+                    max="3"
+                    step="0.05"
+                    value={photoScale}
+                    onChange={(e) => setPhotoScale(parseFloat(e.target.value))}
+                    className="flex-grow h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPhotoScale(prev => Math.min(3, Number((prev + 0.1).toFixed(2))))}
+                    className="p-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-slate-600 transition-colors flex items-center justify-center"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <input
-                type="range"
-                min="0.1"
-                max="3"
-                step="0.05"
-                value={photoScale}
-                onChange={(e) => setPhotoScale(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
-              />
+
+              {/* Grid for Rotation & Positioning */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Rotate Section */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <span className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2">
+                      🔄 Rotate Photo
+                    </span>
+                    <p className="text-gray-400 text-[11px] mb-4">
+                      Correct the orientation of mobile phone photos.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPhotoRotation(prev => (prev - 90 + 360) % 360)}
+                      className="flex-1 py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Rotate CCW
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPhotoRotation(prev => (prev + 90) % 360)}
+                      className="flex-1 py-2.5 px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                      Rotate CW
+                    </button>
+                  </div>
+                </div>
+
+                {/* Fine-Tune Position Section */}
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col items-center">
+                  <span className="block text-xs font-extrabold text-slate-500 uppercase tracking-wider mb-2 self-start">
+                    🎯 Fine-Tune Position
+                  </span>
+                  
+                  {/* D-Pad Controller */}
+                  <div className="relative w-28 h-28 flex items-center justify-center">
+                    {/* Up Button */}
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPosition(prev => ({ ...prev, y: prev.y - 8 }))}
+                      className="absolute top-0 w-8 h-8 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm flex items-center justify-center text-slate-600 transition-all active:scale-90"
+                      title="Move Up"
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Left Button */}
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPosition(prev => ({ ...prev, x: prev.x - 8 }))}
+                      className="absolute left-0 w-8 h-8 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm flex items-center justify-center text-slate-600 transition-all active:scale-90"
+                      title="Move Left"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+
+                    {/* Reset Button (Center) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoPosition({ x: 0, y: 0 });
+                        setPhotoScale(1);
+                        setPhotoRotation(0);
+                      }}
+                      className="w-10 h-10 bg-slate-200 hover:bg-slate-300 rounded-full flex items-center justify-center text-slate-600 transition-all active:scale-90 shadow-inner"
+                      title="Reset Adjustment"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+
+                    {/* Right Button */}
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPosition(prev => ({ ...prev, x: prev.x + 8 }))}
+                      className="absolute right-0 w-8 h-8 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm flex items-center justify-center text-slate-600 transition-all active:scale-90"
+                      title="Move Right"
+                    >
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+
+                    {/* Down Button */}
+                    <button
+                      type="button"
+                      onClick={() => setPhotoPosition(prev => ({ ...prev, y: prev.y + 8 }))}
+                      className="absolute bottom-0 w-8 h-8 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg shadow-sm flex items-center justify-center text-slate-600 transition-all active:scale-90"
+                      title="Move Down"
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tip Box */}
+              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100/60 text-left text-xs leading-relaxed text-emerald-800 flex items-start gap-2.5 shadow-sm">
+                <span className="text-base leading-none">💡</span>
+                <div>
+                  <span className="font-bold text-emerald-950 block mb-0.5">Quick Cropping Tip</span>
+                  You can click/tap and drag the photo directly inside the preview above to move it around, then zoom and rotate it using these controls.
+                </div>
+              </div>
             </div>
 
             {/* Action Buttons */}
