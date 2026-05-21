@@ -268,8 +268,19 @@ export default function EditCampaignPage() {
         )
       );
 
+      const token = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('admin_token='))
+        ?.split('=')[1];
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns/${params.id}`, {
         method: 'PUT',
+        headers,
         body: formData,
       });
 

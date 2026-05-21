@@ -435,8 +435,19 @@ export default function CreateCampaignPage() {
         formData.append('cropShape', JSON.stringify(cropShape));
       }
 
+      const token = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith('admin_token='))
+        ?.split('=')[1];
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/campaigns`, {
         method: 'POST',
+        headers,
         body: formData,
       });
 
