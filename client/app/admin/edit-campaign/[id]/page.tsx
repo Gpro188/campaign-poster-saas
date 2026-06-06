@@ -45,13 +45,14 @@ export default function EditCampaignPage() {
   // Resize state
   const [resizingField, setResizingField] = useState<string | null>(null);
   const [resizeHandle, setResizeHandle] = useState<'left' | 'right' | null>(null);
-  const [resizeStart, setResizeStart] = useState({ x: 0, width: 0 });
+  const [resizeStart, setResizeStart] = useState({ x: 0, width: 0, startMouseX: 0 });
   
   // Crop shape state
   const [cropShape, setCropShape] = useState<CropShape | null>(null);
   const [selectedShapeType, setSelectedShapeType] = useState<'none' | 'circle' | 'rectangle' | 'triangle'>('none');
   const [draggingShape, setDraggingShape] = useState(false);
   const [resizingShape, setResizingShape] = useState(false);
+  const [shapeResizeStart, setShapeResizeStart] = useState({ width: 0, height: 0, startMouseX: 0, startMouseY: 0 });
   
   // Subscription duration
   const [startDate, setStartDate] = useState('');
@@ -163,6 +164,7 @@ export default function EditCampaignPage() {
       
       if (isNearCorner) {
         setResizingShape(true);
+        setShapeResizeStart({ width: cropShape.width, height: cropShape.height, startMouseX: x, startMouseY: y });
       } else {
         setDraggingShape(true);
         setShapeDragOffset({ x: x - cropShape.x, y: y - cropShape.y });
@@ -190,8 +192,8 @@ export default function EditCampaignPage() {
     } else if (resizingShape) {
       setCropShape(prev => prev ? {
         ...prev,
-        width: Math.max(50, x - prev.x),
-        height: Math.max(50, y - prev.y)
+        width: Math.max(50, shapeResizeStart.width + (x - shapeResizeStart.startMouseX)),
+        height: Math.max(50, shapeResizeStart.height + (y - shapeResizeStart.startMouseY))
       } : null);
     }
   };
@@ -432,7 +434,7 @@ export default function EditCampaignPage() {
       ) {
         setResizingField(pos.field);
         setResizeHandle('left');
-        setResizeStart({ x: pos.x, width: boxWidth });
+        setResizeStart({ x: pos.x, width: boxWidth, startMouseX: x });
         e.preventDefault();
         return;
       }
@@ -446,7 +448,7 @@ export default function EditCampaignPage() {
       ) {
         setResizingField(pos.field);
         setResizeHandle('right');
-        setResizeStart({ x: pos.x, width: boxWidth });
+        setResizeStart({ x: pos.x, width: boxWidth, startMouseX: x });
         e.preventDefault();
         return;
       }
@@ -483,7 +485,7 @@ export default function EditCampaignPage() {
 
     // Handle resizing
     if (resizingField && resizeHandle) {
-      const dx = x - resizeStart.x;
+      const dx = x - resizeStart.startMouseX;
       
       setTextPositions((prev) =>
         prev.map((pos) => {

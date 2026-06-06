@@ -8,6 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://campaign-poster.vercel.app"),
   title: "Dpro Campaigns | Grassroots Marketing & Activation",
   description: "Engage, Mobilize, and Win: All-in-One Tools for Grassroots Campaigns",
   openGraph: {

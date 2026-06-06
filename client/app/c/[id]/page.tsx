@@ -43,9 +43,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
-  const frameUrl = campaign.frameImageUrl.startsWith('http')
+  let frameUrl = campaign.frameImageUrl.startsWith('http')
     ? campaign.frameImageUrl
     : `${(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace('/api', '')}${campaign.frameImageUrl}`;
+
+  // Optimize image for WhatsApp (must be < 300kb, JPEG is safest)
+  if (frameUrl.includes('cloudinary.com') && frameUrl.includes('/upload/')) {
+    frameUrl = frameUrl.replace('/upload/', '/upload/w_1200,h_630,c_pad,b_white,q_auto:eco,f_jpg/');
+  }
 
   return {
     title: `${campaign.title} | Campaign Poster Generator`,

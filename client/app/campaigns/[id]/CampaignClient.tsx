@@ -74,9 +74,10 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
   useEffect(() => {
     if (campaign && !customShareMessage) {
       const shortId = encodeShortId(campaign._id);
+      const cacheBuster = new Date().getTime().toString().slice(-4);
       const campaignUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}/c/${shortId}` 
-        : `/c/${shortId}`;
+        ? `${window.location.origin}/c/${shortId}?v=${cacheBuster}` 
+        : `/c/${shortId}?v=${cacheBuster}`;
       setCustomShareMessage(
         `*${campaign.title}*\n\n${campaign.description || 'Join the campaign!'}\n\n👉 Create your custom campaign poster now! 👇\n${campaignUrl}`
       );
