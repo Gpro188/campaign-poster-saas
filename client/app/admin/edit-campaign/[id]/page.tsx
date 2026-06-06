@@ -13,6 +13,7 @@ interface DraggableText {
   y: number;
   width?: number; // Text box width for wrapping
   fontSize?: number;
+  fontFamily?: string;
   color?: string;
   isBold?: boolean;
   enabled?: boolean;
@@ -90,6 +91,7 @@ export default function EditCampaignPage() {
             y: pos.y,
             width: pos.width, // Load width
             fontSize: pos.fontSize || 48,
+            fontFamily: pos.fontFamily || 'Arial',
             color: pos.color || '#FFFFFF',
             isBold: pos.isBold !== undefined ? pos.isBold : pos.field === 'name',
             enabled: pos.enabled !== false, // Load enabled status from database

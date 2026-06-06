@@ -13,6 +13,7 @@ interface DraggableText {
   y: number;
   width?: number; // Text box width for wrapping
   fontSize?: number;
+  fontFamily?: string;
   color?: string;
   isBold?: boolean;
   enabled?: boolean;
