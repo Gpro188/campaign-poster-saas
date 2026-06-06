@@ -268,13 +268,42 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
   }, [campaign, frameLoaded, photoPreview, croppedPhoto, photoLoaded, photoScale, photoPosition, name, designation, location, step]);
 
   // Draw text with wrapping to fit within maxWidth
-  const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number, align: 'left' | 'center' | 'right' = 'left') => {
-    const words = text.split(' ');
-    let line = '';
-    let currentY = y;
-    const maxLines = 2; // Maximum 2 lines
-    let lineCount = 0;
-    const lines: string[] = [];
+  const drawWrappedText = (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, initialFontSize: number, align: 'left' | 'center' | 'right' = 'left') => {
+      // Auto-scale font size if text is too wide (especially useful for Malayalam)
+      let currentFontSize = initialFontSize;
+      const originalFontStr = ctx.font;
+      let words = text.split(' ');
+      
+      // Check if any single word is wider than maxWidth
+      let needsScaling = false;
+      for (const word of words) {
+        if (ctx.measureText(word).width > maxWidth) {
+          needsScaling = true;
+          break;
+        }
+      }
+
+      if (needsScaling) {
+        // Reduce font size until the longest word fits
+        while (currentFontSize > 12) {
+          currentFontSize -= 2;
+          ctx.font = originalFontStr.replace(/\d+px/, `${currentFontSize}px`);
+          let fits = true;
+          for (const word of words) {
+            if (ctx.measureText(word).width > maxWidth) {
+              fits = false;
+              break;
+            }
+          }
+          if (fits) break;
+        }
+      }
+      
+      let line = '';
+      let currentY = y;
+      const maxLines = 2; // Maximum 2 lines
+      let lineCount = 0;
+      const lines: string[] = [];
 
     for (let i = 0; i < words.length; i++) {
       const testLine = line + words[i] + ' ';
@@ -318,12 +347,13 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
         drawX = x + maxWidth;
       }
       
-      ctx.fillText(lineText, drawX, currentY + (index * lineHeight));
+      ctx.fillText(lineText, drawX, currentY + (index * (currentFontSize * 1.2)));
     });
     
-    // Reset alignment
+    // Reset alignment and font
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
+    ctx.font = originalFontStr;
   };
 
   const drawText = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, positions: TextPosition[], showPlaceholders: boolean = false) => {
@@ -362,10 +392,17 @@ export default function CampaignClient({ initialCampaign = null }: CampaignClien
         ctx.fillStyle = color;
         
         // Add text shadow for better visibility
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
+        if (pos.hasShadow) {
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+          ctx.shadowBlur = 6;
+          ctx.shadowOffsetX = 3;
+          ctx.shadowOffsetY = 3;
+        } else {
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+        }
         
         // Calculate max width (use custom width if set, otherwise use canvas width - x position - margin)
         const maxWidth = pos.width || (canvas.width - pos.x - 40);

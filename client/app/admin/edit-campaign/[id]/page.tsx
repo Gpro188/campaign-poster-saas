@@ -16,6 +16,8 @@ interface DraggableText {
   fontFamily?: string;
   color?: string;
   isBold?: boolean;
+  hasShadow?: boolean;
+  previewText?: string;
   enabled?: boolean;
   textAlign?: 'left' | 'center' | 'right';
 }
@@ -94,6 +96,8 @@ export default function EditCampaignPage() {
             fontFamily: pos.fontFamily || 'Arial',
             color: pos.color || '#FFFFFF',
             isBold: pos.isBold !== undefined ? pos.isBold : pos.field === 'name',
+            hasShadow: pos.hasShadow || false,
+            previewText: pos.previewText || '',
             enabled: pos.enabled !== false, // Load enabled status from database
             textAlign: pos.textAlign || 'left', // Load text alignment
           }));
@@ -348,14 +352,33 @@ export default function EditCampaignPage() {
           ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px "${fontFamily}"`;
           ctx.fillStyle = color;
           
+          if (pos.hasShadow) {
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+            ctx.shadowBlur = 6;
+            ctx.shadowOffsetX = 3;
+            ctx.shadowOffsetY = 3;
+          } else {
+            ctx.shadowColor = 'transparent';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+          }
+          
           // Calculate text box dimensions
           const boxWidth = pos.width || (canvas.width - pos.x - 40);
           const boxHeight = fontSize * 2.5; // Approximate for 2 lines
           const textAlign = pos.textAlign || 'left';
 
           // Draw wrapped text matching public view
-          drawWrappedText(ctx, pos.label, pos.x, pos.y, boxWidth, fontSize, textAlign);
+          const displayString = pos.previewText ? pos.previewText : pos.label;
+          drawWrappedText(ctx, displayString, pos.x, pos.y, boxWidth, fontSize, textAlign);
           
+          // Reset shadow for box drawings
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+
           // Draw text box background
           ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
           ctx.fillRect(pos.x, pos.y, boxWidth, boxHeight);
@@ -552,7 +575,7 @@ export default function EditCampaignPage() {
         JSON.stringify(
           textPositions
             .filter(pos => pos.enabled !== false)
-            .map(({ field, x, y, width, fontSize, fontFamily, color, isBold, textAlign }) => ({
+            .map(({ field, x, y, width, fontSize, fontFamily, color, isBold, hasShadow, previewText, textAlign }) => ({
               field,
               x,
               y,
@@ -561,6 +584,8 @@ export default function EditCampaignPage() {
               fontFamily,
               color,
               isBold,
+              hasShadow,
+              previewText,
               textAlign,
             }))
         )
@@ -936,6 +961,22 @@ export default function EditCampaignPage() {
                           />
                         </div>
                       </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Test Preview Text (To check long names)</label>
+                        <input
+                          type="text"
+                          value={pos.previewText || ''}
+                          onChange={(e) => {
+                            setTextPositions((prev) =>
+                              prev.map((p) =>
+                                p.field === pos.field ? { ...p, previewText: e.target.value } : p
+                              )
+                            );
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                          placeholder="e.g., മുഹമ്മദ് അബ്ദുൽ ഖാദർ"
+                        />
+                      </div>
                       <div className="flex gap-2">
                         <div className="flex-1">
                           <label className="text-xs text-gray-500">Size</label>
@@ -997,6 +1038,38 @@ export default function EditCampaignPage() {
                           <option value="Manjari">Manjari (Malayalam)</option>
                           <option value="Meera Inimai">Meera Inimai</option>
                         </select>
+                      </div>
+                      <div className="flex gap-2 mt-2 mb-2">
+                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={pos.isBold}
+                            onChange={(e) => {
+                              setTextPositions((prev) =>
+                                prev.map((p) =>
+                                  p.field === pos.field ? { ...p, isBold: e.target.checked } : p
+                                )
+                              );
+                            }}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="font-bold">Bold</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer text-sm ml-4">
+                          <input
+                            type="checkbox"
+                            checked={pos.hasShadow}
+                            onChange={(e) => {
+                              setTextPositions((prev) =>
+                                prev.map((p) =>
+                                  p.field === pos.field ? { ...p, hasShadow: e.target.checked } : p
+                                )
+                              );
+                            }}
+                            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                          />
+                          <span className="drop-shadow-md">Shadow</span>
+                        </label>
                       </div>
                       <div>
                         <label className="text-xs text-gray-500">Text Alignment</label>

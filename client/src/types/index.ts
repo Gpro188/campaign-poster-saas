@@ -8,6 +8,8 @@ export interface TextPosition {
   fontFamily?: string;
   color?: string;
   isBold?: boolean;
+  hasShadow?: boolean;
+  previewText?: string;
   enabled?: boolean; // Whether this field should be shown to users
   textAlign?: 'left' | 'center' | 'right'; // Text alignment
 }
