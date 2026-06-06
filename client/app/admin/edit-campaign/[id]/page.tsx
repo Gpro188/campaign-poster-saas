@@ -342,7 +342,8 @@ export default function EditCampaignPage() {
         enabledPositions.forEach((pos) => {
           const fontSize = pos.fontSize || 48;
           const color = pos.color || '#FFFFFF';
-          ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px Arial`;
+          const fontFamily = pos.fontFamily || 'Arial';
+          ctx.font = `${pos.isBold ? 'bold' : ''} ${fontSize}px "${fontFamily}"`;
           ctx.fillStyle = color;
           
           // Calculate text box dimensions
@@ -549,12 +550,13 @@ export default function EditCampaignPage() {
         JSON.stringify(
           textPositions
             .filter(pos => pos.enabled !== false)
-            .map(({ field, x, y, width, fontSize, color, isBold, textAlign }) => ({
+            .map(({ field, x, y, width, fontSize, fontFamily, color, isBold, textAlign }) => ({
               field,
               x,
               y,
               width,
               fontSize,
+              fontFamily,
               color,
               isBold,
               textAlign,
@@ -963,6 +965,36 @@ export default function EditCampaignPage() {
                             className="w-full h-7 border rounded cursor-pointer"
                           />
                         </div>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500">Font Family</label>
+                        <select
+                          value={pos.fontFamily || 'Arial'}
+                          onChange={(e) => {
+                            setTextPositions((prev) =>
+                              prev.map((p) =>
+                                p.field === pos.field ? { ...p, fontFamily: e.target.value } : p
+                              )
+                            );
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded"
+                        >
+                          <option value="Arial">Arial</option>
+                          <option value="Times New Roman">Times New Roman</option>
+                          <option value="Verdana">Verdana</option>
+                          <option value="Courier New">Courier New</option>
+                          <option value="Georgia">Georgia</option>
+                          <option value="Impact">Impact</option>
+                          <option value="Comic Sans MS">Comic Sans MS</option>
+                          <option value="Trebuchet MS">Trebuchet MS</option>
+                          <option value="Roboto">Roboto</option>
+                          <option value="Poppins">Poppins</option>
+                          <option value="Oswald">Oswald</option>
+                          <option value="Playfair Display">Playfair Display</option>
+                          <option value="Anek Malayalam">Anek Malayalam</option>
+                          <option value="Manjari">Manjari (Malayalam)</option>
+                          <option value="Meera Inimai">Meera Inimai</option>
+                        </select>
                       </div>
                       <div>
                         <label className="text-xs text-gray-500">Text Alignment</label>
